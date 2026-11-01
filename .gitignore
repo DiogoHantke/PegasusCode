@@ -1,0 +1,24 @@
+# PlatformIO e arquivos gerados
+.pio/
+build/
+compile_commands.json
+*.elf
+*.hex
+*.o
+*.a
+*.map
+
+# Configurações e cópias locais
+.local/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Variáveis e credenciais locais
+.env
+.env.*
+!.env.example
