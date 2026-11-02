@@ -19,8 +19,10 @@ void pwm_init(void)
     TCCR0B = (1 << CS00);
 }
 
-void pwm_set_duty(pwm_channel_t channel, uint8_t duty)
+void pwm_set_duty(pwm_channel_t channel, uint8_t percent_duty)
 {
+
+    uint8_t duty = ((uint16_t)percent_duty * PWM_MAX_DUTY + 50U) / 100U;
 
     if (channel == PWM_A){
         OCR0A = duty;
