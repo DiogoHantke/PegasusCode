@@ -14,5 +14,6 @@ void timer1_stop(void);
 void timer1_interrupt_enable(void);
 void timer1_interrupt_disable(void);
 uint8_t timer1_take_events(void);
+uint16_t timer1_elapsed_seconds(void);
 
 #endif

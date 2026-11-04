@@ -17,6 +17,7 @@ static volatile uint8_t timer1_events;
 static uint8_t timer1_count_10ms;
 static uint8_t timer1_count_100ms;
 static uint16_t timer1_count_1s;
+static volatile uint16_t timer1_seconds;
 
 void timer1_ctc_init(void) {
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
@@ -32,6 +33,7 @@ void timer1_ctc_init(void) {
         timer1_count_10ms = 0;
         timer1_count_100ms = 0;
         timer1_count_1s = 0;
+        timer1_seconds = 0;
     }
 }
 void timer1_start(void) {
@@ -49,6 +51,13 @@ void timer1_interrupt_enable(void) {
 }
 void timer1_interrupt_disable(void) {
     TIMSK1 &= ~(1U << OCIE1A);
+}
+uint16_t timer1_elapsed_seconds(void) {
+    uint16_t seconds;
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        seconds = timer1_seconds;
+    }
+    return seconds;
 }
 uint8_t timer1_take_events(void) {
     uint8_t events;
@@ -73,5 +82,6 @@ ISR(TIMER1_COMPA_vect) {
     if (++timer1_count_1s >= 1000U) {
         timer1_count_1s = 0;
         timer1_events |= TIMER_EVENT_1S;
+        ++timer1_seconds;
     }
 }

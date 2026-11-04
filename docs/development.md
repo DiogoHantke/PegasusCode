@@ -1,35 +1,28 @@
-# Desenvolvimento
+# Desenvolvimento e manutenção
 
-## Módulos
+[Início](../README.md) · [Roteiro](roadmap.md) · [Validação](testing-and-validation.md)
 
-| Módulo | Responsabilidade | Situação |
-| --- | --- | --- |
-| `src/main.c` | Inicialização e máquina de estados | Parcial |
-| `lib/adc` | Leitura assíncrona de 8 bits | Implementada; validar em hardware |
-| `lib/pwm` | Duty cycle nas saídas do Timer0 | Implementado; validar em hardware |
-| `lib/timer` | Eventos de 1 ms, 10 ms, 100 ms e 1 s | Implementado; integrar à aplicação |
-| `lib/usart` | Comunicação serial | Arquivos vazios reservados |
+O desenvolvimento do Pegasus avança uma funcionalidade por vez, mantendo a documentação próxima do que está sendo feito no código. A ideia é começar pelos casos que podem ser reproduzidos em computador e depois observar a mesma função no robô, primeiro com as rodas suspensas e, quando houver condições, na pista. Os resultados dessa sequência ajudam a decidir o próximo ajuste e deixam uma referência para quem continuar o projeto.
 
-## Próximas etapas
+## Convenções
 
-- Confirmar placa, encapsulamento e mapeamento dos oito sensores.
-- Corrigir a leitura do botão e definir seu tratamento de acionamento.
-- Implementar coleta de mínimos e máximos durante a calibração.
-- Implementar as ações e transições dos demais estados.
-- Integrar as interrupções e os eventos do Timer1.
-- Implementar a USART, se necessária.
-- Validar ADC, PWM e temporização em bancada.
+Mantenha headers e implementações em `lib/<módulo>/`, com quatro espaços de indentação. Drivers concentram registradores; aplicação concentra estados, autorização de movimento e tempos. Algoritmos recebem dados e estado explícitos para permitir teste sem AVR. Documente unidades, intervalos, propriedade de buffers, validade e comportamento de erro.
 
-## Organização aplicada
+Evite alocação dinâmica e dimensione buffers considerando os 2 KB de SRAM. Dados compartilhados com ISR usam volatile quando necessário e acesso atômico para múltiplos bytes. Não confunda volatile com atomicidade. Limite o trabalho das interrupções e das tarefas cooperativas; proíba esperas bloqueantes durante movimento na arquitetura final.
 
-Os módulos foram movidos de `src/libs/` para `lib/`, separados por periférico. Os includes foram ajustados à nova estrutura.
+## Integração de uma alteração
 
-Foram corrigidos os bloqueios de compilação encontrados: proteção e tipos do cabeçalho ADC, include de um arquivo inexistente, retorno ausente em `adc_read` e passagem/atribuição do ponteiro de estado na calibração. Os identificadores dos sensores agora representam números de canais ADC (0 a 7), sem depender do símbolo inexistente PC7.
+1. Defina comportamento, entradas, saídas, falhas e critério de aceite.
+2. Identifique pinos, temporizadores, memória e orçamento de execução envolvidos.
+3. Implemente a função e conecte suas transições ao supervisor.
+4. Compile com os avisos habilitados e revise consumo estático e margem da pilha.
+5. Execute os ensaios pertinentes e registre limites ainda não verificados.
+6. Atualize o documento do subsistema e a situação no roteiro.
 
-As configurações antigas do editor foram preservadas em `.local/editor-backup/vscode/`, ignorada pelo Git. Elas continham caminhos locais de AVR e configurações de ROS/Python sem relação com este firmware.
+A CI em `.github/workflows/firmware-build.yml` compila o ambiente atmega328p, registra pacotes/tamanho e publica ELF/HEX quando o trabalho conclui com sucesso. O badge representa a execução do workflow no GitHub; não comprova comportamento em bancada nem valida alterações locais não enviadas.
 
-Não há testes automatizados de comportamento. Compilar com sucesso não significa que as funções do robô estejam concluídas.
+## Registros de engenharia
 
-## Verificação da organização
+Cada resultado deve identificar commit, alterações locais, toolchain, hardware, parâmetros, equipamento, procedimento, comportamento esperado e observado. Metas devem permanecer identificadas até haver evidência. Uma mudança nos pinos também precisa aparecer no documento de hardware. Da mesma forma, ajustes de temporização devem atualizar os registros de desempenho, enquanto novas transições precisam ser refletidas na máquina de estados e nas permissões de comunicação.
 
-A compilação foi validada com `make all size` (todos os módulos C) e `pio run` (aplicação e dependências utilizadas). Permanecem avisos de variáveis não utilizadas na calibração incompleta. Não foi realizada gravação ou validação em hardware.
+EEPROM versionada, causa de reset, WDT e BOD exigem procedimentos próprios antes da validação em pista. O diretorio `lib/flash` ainda é uma reserva e não comprova persistência. Nunca documentar valor antigo de Flash/SRAM como medição da versão corrente.

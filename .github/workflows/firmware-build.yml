@@ -1,0 +1,66 @@
+name: Firmware build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install PlatformIO Core
+        run: python -m pip install 'platformio==6.2.0'
+      - name: Build ATmega328P firmware
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-artifacts
+          pio --version | tee ci-artifacts/toolchain.txt
+          pio run -e atmega328p 2>&1 | tee ci-artifacts/build.log
+      - name: Record resolved packages
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts
+          pio pkg list -e atmega328p > ci-artifacts/packages.txt 2>&1
+      - name: Report size and collect firmware
+        shell: bash
+        run: |
+          set -o pipefail
+          pio run -e atmega328p -t size 2>&1 | tee ci-artifacts/size.txt
+          cp .pio/build/atmega328p/firmware.elf ci-artifacts/
+          cp .pio/build/atmega328p/firmware.hex ci-artifacts/
+      - name: Publish successful firmware
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pegasus-atmega328p-${{ github.sha }}
+          path: |
+            ci-artifacts/firmware.elf
+            ci-artifacts/firmware.hex
+            ci-artifacts/size.txt
+            ci-artifacts/toolchain.txt
+            ci-artifacts/packages.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve build logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pegasus-build-logs-${{ github.sha }}
+          path: |
+            ci-artifacts/*.log
+            ci-artifacts/toolchain.txt
+            ci-artifacts/packages.txt
+          if-no-files-found: warn
+          retention-days: 14
