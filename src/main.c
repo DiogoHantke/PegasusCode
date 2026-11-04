@@ -233,7 +233,7 @@ void calibration_sensor(STATE *state) {
             timer1_stop();
 
             state_calibration = CALIBRATION_FAULT;
-            *state = EMERGENCY;
+            *state = LATERAL_CALIBRATION;
             break;
         }
 
