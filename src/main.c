@@ -36,18 +36,20 @@
 #define CAL_TIMEOUT_SECONDS 5U
 #define THRESHOLD_LINE 50
 #define PERCENT_MOTOR_CALIBRATE 20
+#define MOTOR_REVERSE_DELAY_SECONDS 2U
 #define BUTTON_TIMEOUT_SECONDS 2U
 
-#define QTR00 0x00
-#define QTR01 0x01
-#define QTR02 0x02
-#define QTR03 0x03
-#define QTR04 0x04
-#define QTR05 0x05
-#define QTR06 0x06
-#define QTR07 0x07
+#define QTR00_L 0x00
+#define QTR01_F 0x01
+#define QTR02_F 0x02
+#define QTR03_F 0x03
+#define QTR04_F 0x04
+#define QTR05_F 0x05
+#define QTR06_F 0x06
+#define QTR07_L 0x07
 
 typedef enum {
+
     INIT,
     CALIBRATION,
     WAITING,
@@ -55,14 +57,19 @@ typedef enum {
     FINISH,
     STOP,
     EMERGENCY
+
 } STATE;
 
 typedef enum {
+
     INIT_CALIBRATION,
+    INIT_FRONT_CALIBRATION,
     FRONT_CALIBRATION,
+    INIT_LATERAL_CALIBRATION,
     LATERAL_CALIBRATION,
     DIAGNOSTIC,
     CALIBRATION_FAULT
+
 } STATE_CALIBRATION;
 
 typedef struct {
@@ -88,6 +95,8 @@ typedef struct {
 void calibration_sensor(STATE *state);
 void sensor_calibration_update(SENSOR *sensor, uint8_t value_adc);
 
+/*============================ FUNÇÃO PRINCIPAL ============================*/
+
 int main(void){
 
     STATE state = INIT;
@@ -112,7 +121,24 @@ int main(void){
         switch (state)
         {
         case INIT:
+
+            timer1_start();
+
+            uint32_t button_start_seconds = timer1_elapsed_seconds();
+
+            while (!(PIND & (1 << BUTTON))){
+                if((uint16_t)(timer1_elapsed_seconds() - button_start_seconds) >= BUTTON_TIMEOUT_SECONDS){
+
+                    state = WAITING;
+                    timer1_stop();
+                    break;
+                }
+            }
+
+            if(state == WAITING)break;
+
             state = CALIBRATION;
+            
             break;
 
         case CALIBRATION:
@@ -142,46 +168,37 @@ int main(void){
     return 0;
 }
 
-void calibration_sensor(STATE *state) {
+/*============================ FUNÇÕES AUXILIARES ============================*/
+
+
+void calibration_sensor(STATE *state){
 
     static SENSOR sensors[SENSORS_QUANTITY] = {
-        {.channel = QTR00},
-        {.channel = QTR01},
-        {.channel = QTR02},
-        {.channel = QTR03},
-        {.channel = QTR04},
-        {.channel = QTR05},
-        {.channel = QTR06},
-        {.channel = QTR07}
+        {.channel = QTR00_L},
+        {.channel = QTR01_F},
+        {.channel = QTR02_F},
+        {.channel = QTR03_F},
+        {.channel = QTR04_F},
+        {.channel = QTR05_F},
+        {.channel = QTR06_F},
+        {.channel = QTR07_L}
     };
 
     static uint8_t index = 1;
-    static uint32_t calibration_start_seconds = 0;
+    static uint8_t lateral_initialized = 0;
+
+    static uint16_t calibration_start_seconds = 0;
+    static uint16_t lateral_stop_seconds = 0;
 
     static STATE_CALIBRATION state_calibration = INIT_CALIBRATION;
 
     uint8_t value_adc = 0;
 
-    switch (state_calibration)
-    {
+    switch (state_calibration){
+
     case INIT_CALIBRATION: {
 
-        timer1_start();
-
-        uint32_t button_start_seconds = timer1_elapsed_seconds();
-
-        while (!(PIND & (1 << BUTTON))){
-
-            if ((uint32_t)(timer1_elapsed_seconds() - button_start_seconds) >= BUTTON_TIMEOUT_SECONDS){
-                *state = WAITING;
-                timer1_stop();
-                break;
-            }
-        }
-
-        if (*state == WAITING)break;
-
-        for (uint8_t index_reset = 0; index_reset < SENSORS_QUANTITY; index_reset++){
+        for(uint8_t index_reset = 0; index_reset < SENSORS_QUANTITY; index_reset++){
 
             sensors[index_reset].min = 255;
             sensors[index_reset].max = 0;
@@ -198,42 +215,53 @@ void calibration_sensor(STATE *state) {
             sensors[index_reset].aproved = 0;
         }
 
-        index = 1;
-
-        if (MOTORS_KEY){
-
-            PORTB &= ~(1 << MOTOR_L_IN2);
-            PORTB |=  (1 << MOTOR_L_IN1);
-
-            PORTD &= ~(1 << MOTOR_R_IN2);
-            PORTD |=  (1 << MOTOR_R_IN1);
-
-            pwm_set_duty(PWM_B, PERCENT_MOTOR_CALIBRATE);
-            pwm_set_duty(PWM_A, PERCENT_MOTOR_CALIBRATE);
-        }
+        pwm_set_duty(PWM_A, 0);
+        pwm_set_duty(PWM_B, 0);
 
         PORTB |= (1 << SENSOR_ON);
         PORTB &= ~(1 << LED_L);
 
+        timer1_start();
+
+        state_calibration = INIT_FRONT_CALIBRATION;
+
+        break;
+    }
+
+    case INIT_FRONT_CALIBRATION: {
+
+        index = 1;
+
+        pwm_set_duty(PWM_A, 0);
+        pwm_set_duty(PWM_B, 0);
+
+        PORTB &= ~(1 << MOTOR_L_IN2);
+        PORTB |= (1 << MOTOR_L_IN1);
+
+        PORTD &= ~(1 << MOTOR_R_IN2);
+        PORTD |= (1 << MOTOR_R_IN1);
+
+        if(MOTORS_KEY){
+            pwm_set_duty(PWM_B, PERCENT_MOTOR_CALIBRATE);
+            pwm_set_duty(PWM_A, PERCENT_MOTOR_CALIBRATE);
+        }
+
         calibration_start_seconds = timer1_elapsed_seconds();
+
         state_calibration = FRONT_CALIBRATION;
+
         break;
     }
 
     case FRONT_CALIBRATION: {
 
-        if ((uint32_t)(timer1_elapsed_seconds() - calibration_start_seconds) >= CAL_TIMEOUT_SECONDS){
+        if((uint16_t)(timer1_elapsed_seconds() - calibration_start_seconds) >= CAL_TIMEOUT_SECONDS){
 
             pwm_set_duty(PWM_A, 0);
             pwm_set_duty(PWM_B, 0);
 
-            PORTB &= ~(1 << SENSOR_ON);
-            PORTB |= (1 << LED_L);
+            state_calibration = INIT_LATERAL_CALIBRATION;
 
-            timer1_stop();
-
-            state_calibration = CALIBRATION_FAULT;
-            *state = LATERAL_CALIBRATION;
             break;
         }
 
@@ -244,14 +272,15 @@ void calibration_sensor(STATE *state) {
             if(++index >= SENSORS_QUANTITY-1){
                 index = 1;
             }
+
             break;
         }
 
-        if (adc_read(sensor->channel, &value_adc)){
+        if(adc_read(sensor->channel, &value_adc)){
 
             sensor_calibration_update(sensor, value_adc);
 
-            if (++index >= SENSORS_QUANTITY-1){
+            if(++index >= SENSORS_QUANTITY-1){
                 index = 1;
             }
         }
@@ -279,21 +308,116 @@ void calibration_sensor(STATE *state) {
             pwm_set_duty(PWM_A, 0);
             pwm_set_duty(PWM_B, 0);
 
-            timer1_stop();
-            state_calibration = LATERAL_CALIBRATION;
+            state_calibration = INIT_LATERAL_CALIBRATION;
         }
 
         break;
     }
 
-    case LATERAL_CALIBRATION:
-        break;
+    case INIT_LATERAL_CALIBRATION: {
 
-    case DIAGNOSTIC:
-        break;
+        if(!lateral_initialized){
 
-    case CALIBRATION_FAULT:
+            pwm_set_duty(PWM_A, 0);
+            pwm_set_duty(PWM_B, 0);
+
+            lateral_stop_seconds = timer1_elapsed_seconds();
+            lateral_initialized = 1;
+
+            break;
+        }
+
+        if((uint16_t)(timer1_elapsed_seconds() - lateral_stop_seconds) < MOTOR_REVERSE_DELAY_SECONDS){
+            break;
+        }
+
+        PORTB &= ~(1 << MOTOR_L_IN1);
+        PORTB |= (1 << MOTOR_L_IN2);
+
+        PORTD &= ~(1 << MOTOR_R_IN1);
+        PORTD |= (1 << MOTOR_R_IN2);
+
+        index = 0;
+
+        if(MOTORS_KEY){
+            pwm_set_duty(PWM_B, PERCENT_MOTOR_CALIBRATE);
+            pwm_set_duty(PWM_A, PERCENT_MOTOR_CALIBRATE);
+        }
+
+        calibration_start_seconds = timer1_elapsed_seconds();
+
+        lateral_initialized = 0;
+
+        state_calibration = LATERAL_CALIBRATION;
+
         break;
+    }
+
+    case LATERAL_CALIBRATION: {
+
+        SENSOR *sensor = &sensors[index];
+
+        if(sensors[0].aproved && sensors[SENSORS_QUANTITY-1].aproved){
+            pwm_set_duty(PWM_A, 0);
+            pwm_set_duty(PWM_B, 0);
+
+            state_calibration = DIAGNOSTIC;
+            break;
+        }
+
+        if((uint16_t)(timer1_elapsed_seconds() - calibration_start_seconds) >= CAL_TIMEOUT_SECONDS){
+
+            pwm_set_duty(PWM_B, 0);
+            pwm_set_duty(PWM_A, 0);
+
+            state_calibration = DIAGNOSTIC;
+
+            break;
+        }
+
+        if(sensor->aproved){
+            index = (index == 0) ? 7 : 0;
+            break;
+        }
+
+        if(adc_read(sensor->channel, &value_adc)){
+
+            sensor_calibration_update(sensor, value_adc);
+
+            if(!sensor->aproved && sensor->min <= sensor->max){
+
+                sensor->contrast = sensor->max - sensor->min;
+
+                if(sensor->contrast >= CAL_MIN_CONTRAST){
+                    sensor->aproved = 1;
+                }
+            }
+
+            index = (index == 0) ? 7 : 0;
+        }
+
+        break;
+    }
+
+    case DIAGNOSTIC: {
+
+        pwm_set_duty(PWM_A, 0);
+        pwm_set_duty(PWM_B, 0);
+
+        break;
+    }
+
+    case CALIBRATION_FAULT: {
+
+        pwm_set_duty(PWM_A, 0);
+        pwm_set_duty(PWM_B, 0);
+
+        PORTB &= ~(1 << SENSOR_ON);
+
+        *state = EMERGENCY;
+
+        break;
+    }
 
     default:
         break;
