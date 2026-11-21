@@ -30,7 +30,6 @@
 #define THRESHOLD_LINE 50
 #define PERCENT_MOTOR_CALIBRATE 20
 #define BUTTON_TIMEOUT_SECONDS 2U
-#define BUTTON_DEBOUNCE_MS 30U
 
 #ifndef CAL_WHITE_HIGH
 #define CAL_WHITE_HIGH 0
@@ -44,5 +43,21 @@
 #define QTR05_F 0x05
 #define QTR06_F 0x06
 #define QTR07_L 0x07
+
+void init_sys(void){
+    DDRD = (DDRD & ~(1 << BUTTON)) | (1 << MOTOR_R_IN1) | (1 << MOTOR_R_IN2) | (1 << MOTOR_L_PWM) | (1 << MOTOR_R_PWM);
+    DDRB |= (1 << MOTOR_L_IN1) | (1 << MOTOR_L_IN2) | (1 << LED_L) | (1 << SENSOR_ON);
+
+    PORTD &= ~(1 << BUTTON);
+    PORTB &= ~(1 << LED_L);
+    PORTB &= ~(1 << SENSOR_ON);
+
+    adc_init();
+    pwm_init();
+    timer1_ctc_init();
+    timer1_interrupt_enable();
+    timer1_start();
+    sei();
+}
 
 #endif
