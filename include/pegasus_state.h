@@ -2,6 +2,7 @@
 #define PEGASUS_STATE_H
 
 typedef enum {
+
     INIT,
     CALIBRATION,
     WAITING,
@@ -9,7 +10,7 @@ typedef enum {
     FINISH,
     STOP,
     EMERGENCY
-} STATE;
 
+} STATE;
 
 #endif

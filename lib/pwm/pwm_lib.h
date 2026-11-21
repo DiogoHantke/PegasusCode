@@ -5,8 +5,10 @@
 #include <avr/io.h>
 
 typedef enum {
+
     PWM_A,
     PWM_B
+
 } pwm_channel_t;
 
 void pwm_init(void);

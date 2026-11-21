@@ -1,28 +1,60 @@
-# Desenvolvimento e manutenção
+# Compilação, gravação e testes
 
-[Início](../README.md) · [Roteiro](roadmap.md) · [Validação](testing-and-validation.md)
+[Início](../README.md) · [Hardware](hardware.md) · [Calibração](calibration.md)
 
-O desenvolvimento do Pegasus avança uma funcionalidade por vez, mantendo a documentação próxima do que está sendo feito no código. A ideia é começar pelos casos que podem ser reproduzidos em computador e depois observar a mesma função no robô, primeiro com as rodas suspensas e, quando houver condições, na pista. Os resultados dessa sequência ajudam a decidir o próximo ajuste e deixam uma referência para quem continuar o projeto.
+Execute os comandos na raiz do projeto. O PlatformIO usa a plataforma `atmelavr@5.1.0`, alvo ATmega328P a 16 MHz e C11. Não há dependências de bibliotecas externas.
 
-## Convenções
+## Firmware principal
 
-Mantenha headers e implementações em `lib/<módulo>/`, com quatro espaços de indentação. Drivers concentram registradores; aplicação concentra estados, autorização de movimento e tempos. Algoritmos recebem dados e estado explícitos para permitir teste sem AVR. Documente unidades, intervalos, propriedade de buffers, validade e comportamento de erro.
+```sh
+pio run -e atmega328p
+pio run -e atmega328p -t size
+pio run -e atmega328p -t upload --upload-port /dev/ttyUSB0
+```
 
-Evite alocação dinâmica e dimensione buffers considerando os 2 KB de SRAM. Dados compartilhados com ISR usam volatile quando necessário e acesso atômico para múltiplos bytes. Não confunda volatile com atomicidade. Limite o trabalho das interrupções e das tarefas cooperativas; proíba esperas bloqueantes durante movimento na arquitetura final.
+Ajuste a porta e o perfil de gravação ao bootloader da placa. Compilar não grava o dispositivo. Os arquivos gerados ficam em `.pio/` e não devem ser versionados.
 
-## Integração de uma alteração
+Se `pio` do sistema falhar por incompatibilidade entre Python e Click, use o ambiente isolado instalado pelo PlatformIO, quando disponível:
 
-1. Defina comportamento, entradas, saídas, falhas e critério de aceite.
-2. Identifique pinos, temporizadores, memória e orçamento de execução envolvidos.
-3. Implemente a função e conecte suas transições ao supervisor.
-4. Compile com os avisos habilitados e revise consumo estático e margem da pilha.
-5. Execute os ensaios pertinentes e registre limites ainda não verificados.
-6. Atualize o documento do subsistema e a situação no roteiro.
+```sh
+~/.platformio/penv/bin/pio run -e atmega328p
+```
 
-A CI em `.github/workflows/firmware-build.yml` compila o ambiente atmega328p, registra pacotes/tamanho e publica ELF/HEX quando o trabalho conclui com sucesso. O badge representa a execução do workflow no GitHub; não comprova comportamento em bancada nem valida alterações locais não enviadas.
+Com `avr-gcc`, `avr-objcopy` e `avr-size` instalados, há uma alternativa sem PlatformIO:
 
-## Registros de engenharia
+```sh
+make
+make size
+make clean
+```
 
-Cada resultado deve identificar commit, alterações locais, toolchain, hardware, parâmetros, equipamento, procedimento, comportamento esperado e observado. Metas devem permanecer identificadas até haver evidência. Uma mudança nos pinos também precisa aparecer no documento de hardware. Da mesma forma, ajustes de temporização devem atualizar os registros de desempenho, enquanto novas transições precisam ser refletidas na máquina de estados e nas permissões de comunicação.
+O Makefile gera `build/pegasus.elf` e `build/pegasus.hex`. `make clean` remove essa pasta.
 
-EEPROM versionada, causa de reset, WDT e BOD exigem procedimentos próprios antes da validação em pista. O diretorio `lib/flash` ainda é uma reserva e não comprova persistência. Nunca documentar valor antigo de Flash/SRAM como medição da versão corrente.
+## Ensaio de motores
+
+O ambiente `test_motors` compila somente `src/diagnostics/motors.c` e os drivers necessários, sem o main da aplicação. Inicia movimento ao ligar, com PWM de 30%; use rodas suspensas. Alterna os sentidos a partir da leitura dos sensores, com pausa de dois segundos antes da inversão. Esse ensaio não possui os timeouts da calibração principal.
+
+```sh
+pio run -e test_motors
+pio run -e test_motors -t upload --upload-port /dev/ttyUSB0
+```
+
+## Onde acompanhar o código
+
+Comece por `src/main.c`: ele configura GPIO, ADC, PWM e Timer1, mantém o estado principal e, no laço contínuo, consulta o botão antes de executar o `switch(state)`. A leitura do botão e o debounce também ficam no `main.c`.
+
+Na pasta `src/calibration/`, `calibration.c` mostra a sequência de estados. `calibration_initial.c` contém a preparação e a aquisição frontal/lateral, `calibration_diagnostic.c` conduz as tentativas de recuperação, `calibration_filter.c` trata as amostras e `calibration_detection.c` confirma as referências de branco/preto. O contexto fica privado nesses módulos, declarado em `calibration_internal.h`; a interface pública continua em `include/calibration.h`.
+
+## Testes no computador
+
+```sh
+make test
+```
+
+Equivale a `sh tests/host/run.sh` e requer um compilador C disponível como `cc` ou definido em `CC`. O script cria um executável temporário fora do projeto e o remove ao terminar.
+
+São 20 cenários executados nas duas polaridades claro/escuro: aprovação direta, contraste insuficiente, recuperação frontal e lateral, recuperação tardia, ruído, ausência de referências, ADC sem progresso, timeouts e reinício da calibração após sucesso ou falha. São conferidos ordem dos movimentos, pausa de inversão, limites de tentativas, motores parados e sinalização do resultado. Os testes usam ADC assíncrono e GPIO simulados; não medem os sinais físicos da placa.
+
+Além dos 40 casos de calibração, nove cenários exercitam o `main.c`: toque curto, toque longo, repique, virada do contador, nova calibração após sucesso/falha e acionamento durante a calibração.
+
+A CI executa esses testes e compila os dois ambientes do PlatformIO. Para validar na bancada, confira os oito canais e a polaridade dos sensores, os sentidos dos motores com rodas suspensas, os tempos e a indicação do LED.

@@ -3,8 +3,8 @@
 
 #define PWM_MAX_DUTY 255U
 
-void pwm_init(void)
-{
+void pwm_init(void){
+
     TCCR0A = 0x00;
     TCCR0B = 0x00;
     TCNT0  = 0x00;
@@ -17,18 +17,21 @@ void pwm_init(void)
 
     TCCR0A = (1 << WGM01)|(1 << WGM00)|(1 << COM0A1)|(1 << COM0B1);
     TCCR0B = (1 << CS00);
+
 }
 
-void pwm_set_duty(pwm_channel_t channel, uint8_t percent_duty)
-{
+void pwm_set_duty(pwm_channel_t channel, uint8_t percent_duty){
 
     uint8_t duty = ((uint16_t)percent_duty * PWM_MAX_DUTY + 50U) / 100U;
 
     if (channel == PWM_A){
+
         OCR0A = duty;
 
     }else{
+
         OCR0B = duty;
 
     }
+
 }

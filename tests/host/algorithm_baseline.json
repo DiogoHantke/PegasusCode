@@ -1,6 +1,0 @@
-{
-    "lib/sensor/sensor_lib.c": [
-        "sensor_calibration_update(SENSOR *sensor, uint8_t value_adc){",
-        "cc60b8b343df44b8d23067af69f6c73be9bbc5cc554a01c0c7a5304b90ac48e9"
-    ]
-}

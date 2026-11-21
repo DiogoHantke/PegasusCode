@@ -1,8 +1,8 @@
 # Hardware e mapeamento de pinos
 
-[Início](../README.md) · [Gravação](build-and-flashing.md)
+[Início](../README.md) · [Compilação e gravação](development.md)
 
-O alvo é ATmega328P a 16 MHz em placa Nano, com 32 KB Flash, 2 KB SRAM e 1 KB EEPROM. O perfil de compilação atual é `uno`; o bootloader instalado determina a configuração correta de gravação. ADC6 e ADC7 são entradas analógicas dedicadas nos encapsulamentos que as disponibilizam.
+O alvo é ATmega328P a 16 MHz em placa Nano, com 32 KB Flash, 2 KB SRAM. O perfil de compilação atual é `uno`; o bootloader instalado determina a configuração correta de gravação. ADC6 e ADC7 são entradas analógicas dedicadas nos encapsulamentos que as disponibilizam.
 
 ## Componentes e famílias
 
@@ -14,7 +14,7 @@ O ATmega328P concentra a aquisição dos sensores, a temporização e a geraçã
 | Placa de desenvolvimento | Arduino Nano, variante ATmega328P | Suporte físico do microcontrolador e conexão de programação |
 | Ponte H dupla | TB6612FNG | Aciona os dois motores com PWM e sinais de direção |
 | Malha frontal de reflectância | Identificação QTR01–QTR06 | Seis canais utilizados pela calibração frontal |
-| Sensores laterais | Identificação QTR00 e QTR07 | Dois canais reservados à etapa lateral |
+| Sensores laterais | Identificação QTR00 e QTR07 | Dois canais utilizados pela calibração lateral |
 | Comunicação sem fio prevista | HC-05 ou HC-06 | Módulo Bluetooth serial, conforme a montagem |
 | Motores | Motores DC; part number não registrado | Produzem o movimento das rodas |
 | Botão, LED e buzzer | Componentes discretos; part numbers não registrados | Entrada de operação e sinalização |
@@ -36,6 +36,8 @@ QTR01 é o identificador de um canal da malha no firmware. Ele não comprova, po
 | LED | D13/PB5 | Indicador de inicialização/calibração |
 | USART | D0/PD0 e D1/PD1 | RX e TX |
 | Buzzer histórico | D10/PB2 | Sem acionamento no main atual |
+
+Após a observação de giro com comandos iguais nos dois motores, a calibração passou a usar polaridades opostas: avanço com `MOTOR_L_IN1=0`, `MOTOR_L_IN2=1`, `MOTOR_R_IN1=1`, `MOTOR_R_IN2=0`; recuo com os quatro níveis invertidos. Essa correção se aplica tanto à calibração inicial quanto aos três ciclos do diagnóstico. Depois da observação de que o primeiro movimento era de ré, os comandos dos dois motores foram invertidos para corrigir o sentido de avanço.
 
 Esses nomes descrevem o software, não comprovam o lado físico. O planejamento informa MOTOR_L em A01/A02 e MOTOR_R em B01/B02 do TB6612FNG, com divergências históricas de nomenclatura. Por isso, a conferência precisa acompanhar cada canal até a roda correspondente e verificar o sentido de rotação antes do ajuste do controlador. Nessa mesma etapa, devem ser medidos a tensão e o estado de STBY, além do comportamento de frenagem e roda livre. PWM zero representa um comando; não comprova parada mecânica nem desligamento elétrico completo.
 
