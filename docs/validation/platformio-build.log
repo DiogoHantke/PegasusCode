@@ -1,0 +1,57 @@
+Processing atmega328p (platform: atmelavr@5.1.0; board: uno)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/atmelavr/uno.html
+PLATFORM: Atmel AVR (5.1.0) > Arduino Uno
+HARDWARE: ATMEGA328P 16MHz, 2KB RAM, 31.50KB Flash
+DEBUG: Current (avr-stub) External (avr-stub, simavr)
+PACKAGES: 
+ - toolchain-atmelavr @ 1.70300.191015 (7.3.0)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 3 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- pwm
+|-- timer
+|-- adc
+Building in release mode
+Compiling .pio/build/atmega328p/src/calibration/calibration.o
+Compiling .pio/build/atmega328p/src/communication/system_init.o
+Compiling .pio/build/atmega328p/src/main.o
+Linking .pio/build/atmega328p/firmware.elf
+Checking size .pio/build/atmega328p/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [==        ]  15.8% (used 324 bytes from 2048 bytes)
+Flash: [==        ]  22.6% (used 7284 bytes from 32256 bytes)
+========================= [SUCCESS] Took 0.41 seconds =========================
+
+Processing test_motors (platform: atmelavr@5.1.0; board: uno)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/atmelavr/uno.html
+PLATFORM: Atmel AVR (5.1.0) > Arduino Uno
+HARDWARE: ATMEGA328P 16MHz, 2KB RAM, 31.50KB Flash
+DEBUG: Current (avr-stub) External (avr-stub, simavr)
+PACKAGES: 
+ - toolchain-atmelavr @ 1.70300.191015 (7.3.0)
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 3 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- adc
+|-- pwm
+|-- timer
+Building in release mode
+Checking size .pio/build/test_motors/firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [          ]   0.7% (used 15 bytes from 2048 bytes)
+Flash: [          ]   2.5% (used 792 bytes from 32256 bytes)
+========================= [SUCCESS] Took 0.22 seconds =========================
+
+Environment    Status    Duration
+-------------  --------  ------------
+atmega328p     SUCCESS   00:00:00.411
+test_motors    SUCCESS   00:00:00.217
+========================= 2 succeeded in 00:00:00.628 =========================

@@ -1,228 +1,669 @@
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/atomic.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "supervisor.h"
-#include "pegasus_protocol.h"
-#include "pegasus_config.h"
-#include "calibration.h"
+/* Comunicação básica: sem controlador de corrida, heap ou printf no AVR. */
 #include "adc_lib.h"
+#include "calibration.h"
+#include "pegasus_config.h"
+#include "pegasus_protocol.h"
 #include "pwm_lib.h"
+#include "supervisor.h"
 #include "timer_lib.h"
+#include <avr/interrupt.h>
+#include <avr/io.h>
+#include <avr/pgmspace.h>
+#include <string.h>
+#include <util/atomic.h>
 #ifndef BT_BAUD
 #define BT_BAUD 9600UL
 #endif
-#ifndef MANUAL_TIMEOUT_MS
+#define RX_SIZE 32U
+#define TX_SIZE 64U
+#define PERIOD_MS 200U
+#define MONITOR_TIMEOUT_MS 1500U
 #define MANUAL_TIMEOUT_MS 300U
-#endif
-#ifndef LINK_TIMEOUT_MS
-#define LINK_TIMEOUT_MS 1500U
-#endif
-static volatile uint8_t rx[128], tx[256], rh, rt, th, tt, overflow;
+#define NONE 255U
+#define R_ID 1U
+#define R_GAINS 2U
+#define R_STATUS 4U
+#define R_SENSORS 8U
+#define R_DIAG 16U
+
+static volatile uint8_t rx[RX_SIZE];
+static volatile uint8_t tx[TX_SIZE];
+static volatile uint8_t rh;
+static volatile uint8_t rt;
+static volatile uint8_t th;
+static volatile uint8_t tt;
+static volatile uint8_t overflow;
 static char frame[FRAME_MAX];
-static uint8_t used, manual, estop, fault, calibrated, sample=1;
-static uint8_t cache_seq[8], cache_crc[8], cache_result[8], cache_count, cache_pos;
-static uint16_t last_link, last_move, last_telemetry, previous_ms, telemetry_ms=BT_BAUD<19200?200:100;
-static uint32_t uptime, race_start, elapsed;
-static int16_t left_pwm, right_pwm;
-static STATE previous_state=INIT;
+static uint8_t used;
+static uint8_t manual;
+static uint8_t estop;
+static uint8_t fault;
+static uint8_t calibrated;
+static uint8_t sample = 1;
+static uint8_t replies;
+static uint8_t ack_seq;
+static uint8_t ack_code = NONE;
+static uint8_t have_last;
+static uint8_t last_seq;
+static uint8_t last_crc;
+static uint8_t last_result;
+static uint8_t monitor;
+static uint8_t diagnostic = 1;
+static uint16_t last_move;
+static uint16_t last_ping;
+static uint16_t last_telemetry;
+static STATE previous_state = INIT;
+static SUPERVISOR_GAINS gains = {145, 8, 32};
+/* O cursor TX so e publicado depois de concluir o frame e o CRC. */
+static uint8_t cursor;
+static uint8_t checksum;
+
 ISR(USART_RX_vect){
-    uint8_t status=UCSR0A, c=UDR0, next=(rh+1)&127;
-    if((status&((1<<FE0)|(1<<DOR0)|(1<<UPE0))) || next==rt)overflow=1;
-    else {rx[rh]=c; rh=next;}
+
+    uint8_t status = UCSR0A;
+    uint8_t c = UDR0;
+    uint8_t next = (rh + 1U) & (RX_SIZE - 1U);
+    if((status & ((1 << FE0) | (1 << DOR0) | (1 << UPE0))) || next == rt)
+        overflow = 1;
+    else{
+
+        rx[rh] = c;
+        rh = next;
+
+    }
+
 }
+
 ISR(USART_UDRE_vect){
-    if(tt==th)UCSR0B &= ~(1<<UDRIE0);
-    else {UDR0=tx[tt]; tt++;}
+
+    if(tt == th)
+        UCSR0B &= ~(1 << UDRIE0);
+    else{
+
+        UDR0 = tx[tt];
+        tt = (tt + 1U) & (TX_SIZE - 1U);
+
+    }
+
 }
+
 static void halt(void){
-    pwm_set_duty(PWM_A,0); pwm_set_duty(PWM_B,0);
-    left_pwm=right_pwm=0;
+
+    pwm_set_duty(PWM_A, 0);
+    pwm_set_duty(PWM_B, 0);
+
 }
-static void drive(int16_t l,int16_t r){
-    /* Preserve established calibration forward polarity. Stop PWM before reversing. */
+
+static void drive(int16_t l, int16_t r){
+
     halt();
-    if(l>=0){PORTB &= ~(1<<MOTOR_L_IN1); PORTB |= 1<<MOTOR_L_IN2;}
-    else {PORTB |= 1<<MOTOR_L_IN1; PORTB &= ~(1<<MOTOR_L_IN2);}
-    if(r>=0){PORTD |= 1<<MOTOR_R_IN1; PORTD &= ~(1<<MOTOR_R_IN2);}
-    else {PORTD &= ~(1<<MOTOR_R_IN1); PORTD |= 1<<MOTOR_R_IN2;}
-    left_pwm=l; right_pwm=r;
-    pwm_set_duty(PWM_B,(uint16_t)abs(l)*100/255);
-    pwm_set_duty(PWM_A,(uint16_t)abs(r)*100/255);
+    if(l >= 0){
+
+        PORTB &= ~(1 << MOTOR_L_IN1);
+        PORTB |= 1 << MOTOR_L_IN2;
+
+    }else{
+
+        PORTB |= 1 << MOTOR_L_IN1;
+        PORTB &= ~(1 << MOTOR_L_IN2);
+
+    }
+
+    if(r >= 0){
+
+        PORTD |= 1 << MOTOR_R_IN1;
+        PORTD &= ~(1 << MOTOR_R_IN2);
+
+    }else{
+
+        PORTD &= ~(1 << MOTOR_R_IN1);
+        PORTD |= 1 << MOTOR_R_IN2;
+
+    }
+
+    pwm_set_duty(PWM_B, (uint16_t)(l < 0 ? -l : l) * 100U / 255U);
+    pwm_set_duty(PWM_A, (uint16_t)(r < 0 ? -r : r) * 100U / 255U);
+
 }
-/* Whole frame enqueue; reserve 72 bytes for ACK. Never wait for UART. */
-static uint8_t send(uint8_t seq,const char *body,uint8_t essential){
-    char out[FRAME_MAX];
-    int n=snprintf(out,sizeof(out),"@%u,%s",seq,body);
-    if(n<0 || n>FRAME_MAX-5)return 0;
-    uint8_t crc=protocol_crc(out+1,n-1);
-    n+=snprintf(out+n,sizeof(out)-n,"*%02X\n",crc);
-    uint8_t free=(uint8_t)(tt-th-1);
-    if(n>free || (!essential && n+72>free))return 0;
-    for(int i=0;i<n;i++){tx[th]=out[i]; th++;}
-    UCSR0B |= 1<<UDRIE0;
-    return 1;
+
+static void raw(char c){
+
+    tx[cursor] = c;
+    cursor = (cursor + 1U) & (TX_SIZE - 1U);
+
 }
-static void ack(uint8_t seq,uint8_t error){
-    char body[24]; snprintf(body,sizeof(body),"%s,%u",error?"NACK":"ACK",error);
-    send(seq,body,1);
+
+static void byte(char c){
+
+    checksum ^= (uint8_t)c;
+    for(uint8_t i = 0; i < 8; i++)
+        checksum = checksum & 128U ? (uint8_t)((checksum << 1) ^ 7U) : (uint8_t)(checksum << 1);
+    raw(c);
+
 }
-static uint8_t number(const char *s,uint16_t *n){
-    if(!s || !*s)return 0;
-    uint16_t v=0;
-    while(*s){if(*s<'0'||*s>'9'||v>1000)return 0; v=v*10+(*s++-'0');}
-    *n=v; return 1;
+
+static void decimal(uint16_t n){
+
+    char digits[5];
+    uint8_t count = 0;
+    do {
+
+        digits[count++] = '0' + n % 10U;
+        n /= 10U;
+
+    } while(n);
+    while(count)
+        byte(digits[--count]);
+
 }
-static void status(STATE state){
-    char b[100];
-    snprintf(b,sizeof(b),"T,%u,%u,%u,%d,%d,%lu,%u,%u",state,manual|(estop<<1)|(calibrated<<2),fault,left_pwm,right_pwm,(unsigned long)elapsed,calibration_phase(),CAL_WHITE_HIGH);
-    send(0,b,0);
+
+static void field(uint16_t n){
+
+    byte(',');
+    decimal(n);
+
 }
-static void sensors(void){
-    char b[72];
-    snprintf(b,sizeof(b),"S,%u,%u,%u,%u,%u,%u,%u",adc_latest(1),adc_latest(2),adc_latest(3),adc_latest(4),adc_latest(5),adc_latest(6),adc_valid_mask());
-    send(0,b,0);
+
+static void signed_field(int16_t n){
+
+    byte(',');
+    if(n < 0){
+
+        byte('-');
+        n = -n;
+
+    }
+
+    decimal((uint16_t)n);
+
 }
-static uint8_t execute(char *p,STATE *s,uint16_t now){
-    char *arg=strchr(p,','); uint16_t value=0;
-    if(arg){*arg++=0; if(!number(arg,&value))return 2;}
-    if(!strcmp(p,"ESTOP") || !strcmp(p,"STOP")){
-        if(arg)return 2;
-        halt(); manual=0;
-        if(!strcmp(p,"ESTOP"))estop=1;
-        if(*s==CALIBRATION)calibrated=0;
-        *s=STOP; return 0;
-    }
-    if(!strcmp(p,"PING")){
-        if(arg)return 2;
-        send(0,"ID,PEGASUS,1,0",1); return 0;
-    }
-    if(!strcmp(p,"GET_STATUS")){if(arg)return 2;status(*s);return 0;}
-    if(!strcmp(p,"GET_SENSORS")){if(arg)return 2;sensors();return 0;}
-    if(!strcmp(p,"TELEM")){
-        if(!arg || value<(BT_BAUD<19200?200:50) || value>1000)return 2;
-        telemetry_ms=value; return 0;
-    }
-    if(!strcmp(p,"REARM")){
-        if(arg || *s!=STOP)return 3;
-        halt(); estop=0; fault=0; manual=0; *s=WAITING; return 0;
-    }
-    if(estop)return 4;
-    if(!strcmp(p,"MANUAL_STOP")){
-        if(arg)return 2;
-        if(!manual)return 3;
-        halt();return 0;
-    }
-    if(!strcmp(p,"MANUAL_DISABLE")){
-        if(arg)return 2;
-        halt();manual=0; if(*s!=CALIBRATION && *s!=RUNNING)*s=WAITING;return 0;
-    }
-    if(!strcmp(p,"START")){
-        if(arg)return 2;
-        if(manual || !calibrated || (*s!=WAITING && *s!=STOP))return 3;
-        fault=0;elapsed=0;race_start=uptime;*s=RUNNING;return 0;
-    }
-    if(!strcmp(p,"CALIBRATE") || !strcmp(p,"MANUAL_ENABLE")){
-        if(arg)return 2;
-        if(*s==RUNNING || *s==CALIBRATION || *s==EMERGENCY)return 3;
-        halt();fault=0;
-        if(!strcmp(p,"CALIBRATE")){manual=0;calibrated=0;calibration_reset();*s=CALIBRATION;}
-        else {manual=1;*s=WAITING;last_move=now;PORTB |= 1<<SENSOR_ON;}
+
+static void flash(PGM_P p){
+
+    char c;
+    while((c = pgm_read_byte(p++)))
+        byte(c);
+
+}
+
+static uint8_t begin(uint8_t seq, PGM_P type, uint8_t required){
+
+    if(((tt - th - 1U) & (TX_SIZE - 1U)) < required)
         return 0;
-    }
-    if(!strncmp(p,"MANUAL_",7)){
-        if(!manual || *s!=WAITING)return 3;
-        if(!arg || value>160)return 2;
-        if(!strcmp(p,"MANUAL_FORWARD"))drive(value,value);
-        else if(!strcmp(p,"MANUAL_BACKWARD"))drive(-value,-value);
-        else if(!strcmp(p,"MANUAL_LEFT"))drive(-value,value);
-        else if(!strcmp(p,"MANUAL_RIGHT"))drive(value,-value);
-        else return 1;
-        last_move=now;return 0;
-    }
+    cursor = th;
+    checksum = 0;
+    raw('@');
+    decimal(seq);
+    byte(',');
+    flash(type);
     return 1;
+
 }
+
+static char hex(uint8_t n){
+
+    return n < 10 ? '0' + n : 'A' + n - 10;
+
+}
+
+static void finish(void){
+
+    raw('*');
+    raw(hex(checksum >> 4));
+    raw(hex(checksum & 15));
+    raw('\n');
+    th = cursor;
+    UCSR0B |= 1 << UDRIE0;
+
+}
+
+/* A telemetria reserva 16 bytes para ACK/NACK. */
+static void transmit(STATE state){
+
+    if(ack_code != NONE){
+
+        if(!begin(ack_seq, ack_code ? PSTR("NACK") : PSTR("ACK"), 15))
+            return;
+        field(ack_code);
+        finish();
+        ack_code = NONE;
+
+    }
+
+    if(replies & R_ID){
+
+        if(!begin(0, PSTR("ID"), 48))
+            return;
+        byte(',');
+        flash(PSTR("PEGASUS"));
+        field(1);
+        field(0);
+        field(0);
+        finish();
+        replies &= ~R_ID;
+
+    } else if(replies & R_GAINS){
+
+        if(!begin(0, PSTR("G"), 40))
+            return;
+        field(gains.kp);
+        field(gains.ki);
+        field(gains.kd);
+        finish();
+        replies &= ~R_GAINS;
+
+    } else if(replies & R_STATUS){
+
+        if(!begin(0, PSTR("T"), 48))
+            return;
+        field(state);
+        field(manual | (estop << 1) | (calibrated << 2));
+        field(fault);
+        signed_field((PORTB & (1 << MOTOR_L_IN2)) ? OCR0B : -(int16_t)OCR0B);
+        signed_field((PORTD & (1 << MOTOR_R_IN1)) ? OCR0A : -(int16_t)OCR0A);
+        field(0); /* Cronometragem pendente do firmware de corrida. */
+        field(calibration_phase());
+        field(CAL_WHITE_HIGH);
+        finish();
+        replies &= ~R_STATUS;
+
+    } else if(replies & R_SENSORS){
+
+        if(!begin(0, PSTR("S"), 52))
+            return;
+        for(uint8_t i = 1; i <= 6; i++)
+            field(adc_latest(i));
+        field(adc_valid_mask());
+        finish();
+        replies &= ~R_SENSORS;
+
+    } else if(replies & R_DIAG){
+
+        if(!begin(0, PSTR("D"), 40))
+            return;
+        uint8_t low;
+        uint8_t high;
+        uint8_t ok;
+        calibration_get(diagnostic, &low, &high, &ok);
+        field(diagnostic);
+        field(low);
+        field(high);
+        field(ok);
+        finish();
+        replies &= ~R_DIAG;
+        if(++diagnostic > 6)
+            diagnostic = 1;
+
+    }
+
+}
+
+static uint8_t number(const char *p, uint16_t *result){
+
+    if(!p || !*p)
+        return 0;
+    uint16_t n = 0;
+    do {
+
+        if(*p < '0' || *p > '9' || n > 1000)
+            return 0;
+        n = n * 10U + (*p++ - '0');
+
+    } while(*p);
+    *result = n;
+    return 1;
+
+}
+
+#define IS(text) (!strcmp_P(p, PSTR(text)))
+
+static uint8_t execute(char *p, STATE *state, uint16_t now){
+
+    if(!strncmp_P(p, PSTR("SET_PID,"), 8)){
+
+        uint16_t values[3];
+        char *part = p + 8;
+        for(uint8_t i = 0; i < 3; i++){
+
+            char *next = strchr(part, ',');
+            if((i < 2 && !next) || (i == 2 && next))
+                return 2;
+            if(next)
+                *next++ = 0;
+            if(!number(part, &values[i]) || values[i] > (i ? 500 : 1000))
+                return 2;
+            part = next;
+
+        }
+
+        if(estop)
+            return 4;
+        if(manual || (*state != INIT && *state != WAITING && *state != STOP && *state != FINISH))
+            return 3;
+        gains.kp = values[0];
+        gains.ki = values[1];
+        gains.kd = values[2];
+        replies |= R_GAINS;
+        return 0;
+
+    }
+
+    if(IS("SET_PID"))
+        return 2;
+    char *arg = strchr(p, ',');
+    uint16_t value = 0;
+    if(arg){
+
+        *arg++ = 0;
+        if(!number(arg, &value))
+            return 2;
+
+    }
+
+    if(IS("STOP") || IS("ESTOP")){
+
+        if(arg)
+            return 2;
+        halt();
+        manual = 0;
+        if(IS("ESTOP"))
+            estop = 1;
+        if(*state == CALIBRATION)
+            calibrated = 0;
+        *state = STOP;
+        return 0;
+
+    }
+
+    if(IS("PING")){
+
+        if(arg)
+            return 2;
+        monitor = 1;
+        last_ping = now;
+        replies |= R_ID;
+        return 0;
+
+    }
+
+    if(IS("GET_STATUS")){
+
+        if(arg)
+            return 2;
+        replies |= R_STATUS;
+        return 0;
+
+    }
+
+    if(IS("GET_SENSORS")){
+
+        if(arg)
+            return 2;
+        replies |= R_SENSORS;
+        return 0;
+
+    }
+
+    if(IS("GET_PID")){
+
+        if(arg)
+            return 2;
+        replies |= R_GAINS;
+        return 0;
+
+    }
+
+    if(IS("REARM")){
+
+        if(arg || *state != STOP)
+            return 3;
+        halt();
+        estop = manual = fault = 0;
+        *state = WAITING;
+        return 0;
+
+    }
+
+    if(estop)
+        return 4;
+    if(IS("START"))
+        return arg ? 2 : 6; /* Corrida ainda nao implementada. */
+    if(IS("MANUAL_STOP")){
+
+        if(arg)
+            return 2;
+        if(!manual || *state != WAITING)
+            return 3;
+        halt();
+        last_move = now;
+        return 0;
+
+    }
+
+    if(IS("MANUAL_DISABLE")){
+
+        if(arg)
+            return 2;
+        if(*state == RUNNING || *state == CALIBRATION)
+            return 3;
+        if(manual){
+
+            halt();
+            manual = 0;
+            *state = WAITING;
+
+        }
+
+        return 0;
+
+    }
+
+    if(IS("CALIBRATE") || IS("MANUAL_ENABLE")){
+
+        if(arg)
+            return 2;
+        if(*state == RUNNING || *state == CALIBRATION || *state == EMERGENCY)
+            return 3;
+        halt();
+        fault = 0;
+        if(IS("CALIBRATE")){
+
+            manual = calibrated = 0;
+            calibration_reset();
+            *state = CALIBRATION;
+
+        }else{
+
+            manual = 1;
+            *state = WAITING;
+            last_move = now;
+            PORTB |= 1 << SENSOR_ON;
+
+        }
+
+        return 0;
+
+    }
+
+    if(!strncmp_P(p, PSTR("MANUAL_"), 7)){
+
+        if(!manual || *state != WAITING)
+            return 3;
+        if(!arg || value > 160)
+            return 2;
+        if(IS("MANUAL_FORWARD"))
+            drive(value, value);
+        else if(IS("MANUAL_BACKWARD"))
+            drive(-value, -value);
+        else if(IS("MANUAL_LEFT"))
+            drive(-value, value);
+        else if(IS("MANUAL_RIGHT"))
+            drive(value, -value);
+        else
+            return 1;
+        last_move = now;
+        return 0;
+
+    }
+
+    return 1;
+
+}
+
 void supervisor_init(void){
-    uint16_t ubrr=F_CPU/16UL/BT_BAUD-1;
-    UBRR0H=ubrr>>8; UBRR0L=ubrr;
-    UCSR0A=0;UCSR0C=(1<<UCSZ01)|(1<<UCSZ00);
-    UCSR0B=(1<<RXEN0)|(1<<TXEN0)|(1<<RXCIE0);
-    halt();PORTB |= 1<<SENSOR_ON;
+
+    uint16_t divisor = F_CPU / 16UL / BT_BAUD - 1;
+    UBRR0H = divisor >> 8;
+    UBRR0L = divisor;
+    UCSR0A = 0;
+    UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+    UCSR0B = (1 << RXEN0) | (1 << TXEN0) | (1 << RXCIE0);
+    halt();
+    PORTB |= 1 << SENSOR_ON;
+
 }
-void supervisor_step(STATE *s){
-    timer1_start();
-    uint16_t now=timer1_elapsed_milliseconds();
-    uptime+=(uint16_t)(now-previous_ms);previous_ms=now;
+
+void supervisor_step(STATE *state){
+
+    uint16_t now = timer1_elapsed_milliseconds();
+    if(manual && *state != WAITING)
+        manual = 0; /* Preserva o estado definido pelo firmware. */
     if(overflow){
-        ATOMIC_BLOCK(ATOMIC_RESTORESTATE){rt=rh;overflow=0;}
-        used=0; halt();manual=0;fault=1;*s=STOP;
-    }
-    uint8_t budget=127;
-    while(rt!=rh && budget--){
-        char c=rx[rt];rt=(rt+1)&127;
-        if(c=='@')used=0;
-        if(!used && c!='@')continue;
-        if(used>=FRAME_MAX-1){used=0;continue;}
-        frame[used++]=c;
-        if(c!='\n')continue;
-        frame[used]=0;used=0;
-        uint8_t seq;char *payload;
-        if(!protocol_decode(frame,&seq,&payload))continue;
-        uint8_t crc=protocol_crc(payload,strlen(payload)), found=0;
-        for(uint8_t i=0;i<cache_count;i++)if(cache_seq[i]==seq){
-            ack(seq,cache_crc[i]==crc?cache_result[i]:5);found=1;break;
+
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE){
+
+            rt = rh;
+            overflow = 0;
+
         }
-        if(found)continue; /* Duplicate cannot refresh movement lease or restart calibration. */
-        uint8_t result=execute(payload,s,now);
-        if(!result)last_link=now;
-        cache_seq[cache_pos]=seq;cache_crc[cache_pos]=crc;cache_result[cache_pos]=result;
-        cache_pos=(cache_pos+1)&7;if(cache_count<8)cache_count++;
-        ack(seq,result);
+
+        used = 0;
+        fault = 1;
+        if(manual){
+
+            halt();
+            manual = 0;
+            *state = STOP;
+
+        }
+
     }
-    if(manual && (uint16_t)(now-last_move)>MANUAL_TIMEOUT_MS){halt();manual=0;fault=2;*s=STOP;}
-    if((*s==RUNNING || *s==CALIBRATION || manual) && (uint16_t)(now-last_link)>LINK_TIMEOUT_MS){
-        halt();manual=0;fault=3;if(*s==CALIBRATION)calibrated=0;*s=STOP;
+
+    transmit(*state);
+    if(ack_code == NONE){
+
+        uint8_t budget = RX_SIZE;
+        while(rt != rh && budget--){
+
+            char c = rx[rt];
+            rt = (rt + 1U) & (RX_SIZE - 1U);
+            if(c == '@')
+                used = 0;
+            if(!used && c != '@')
+                continue;
+            if(used >= FRAME_MAX - 1U){
+
+                used = 0;
+                continue;
+
+            }
+
+            frame[used++] = c;
+            if(c != '\n')
+                continue;
+            frame[used] = 0;
+            used = 0;
+            uint8_t seq;
+            char *p;
+            if(!protocol_decode(frame, &seq, &p))
+                continue;
+            uint8_t crc = protocol_crc(p, strlen(p));
+            uint8_t special = IS("STOP") || IS("ESTOP") || IS("PING") || IS("GET_STATUS") ||
+                              IS("GET_SENSORS") || IS("GET_PID");
+            if(!special && have_last && seq == last_seq)
+                ack_code = crc == last_crc ? last_result : 5;
+            else{
+
+                ack_code = execute(p, state, now);
+                if(!special){
+
+                    have_last = 1;
+                    last_seq = seq;
+                    last_crc = crc;
+                    last_result = ack_code;
+
+                }
+
+            }
+
+            ack_seq = seq;
+            break;
+
+        }
+
     }
+
+    if(manual && (uint16_t)(now - last_move) > MANUAL_TIMEOUT_MS){
+
+        halt();
+        manual = 0;
+        fault = 2;
+        *state = STOP;
+
+    }
+
+    if(monitor && (uint16_t)(now - last_ping) > MONITOR_TIMEOUT_MS){
+
+        monitor = 0;
+        replies &= R_ID | R_GAINS;
+
+    }
+
+    transmit(*state);
+
 }
-static void follow_line(STATE *s){
-    uint16_t total=0;int32_t weighted=0;
-    for(uint8_t i=1;i<=6;i++){
-        uint8_t low,high,ok;calibration_get(i,&low,&high,&ok);
-        if(!ok || high<=low){halt();fault=4;*s=STOP;return;}
-        int16_t v=((int16_t)adc_latest(i)-low)*255/(high-low);
-        if(v<0)v=0;if(v>255)v=255;
-        uint16_t black=CAL_WHITE_HIGH?255-v:v;
-        total+=black;weighted+=(int32_t)black*((int16_t)i*2-7);
-    }
-    if(total<100){halt();fault=5;*s=STOP;return;}
-    int16_t correction=weighted*12/total;
-    int16_t l=80+correction,r=80-correction;
-    if(l<0)l=0;if(l>140)l=140;
-    if(r<0)r=0;if(r>140)r=140;
-    drive(l,r);
-}
-void supervisor_after(STATE *s){
-    uint16_t now=timer1_elapsed_milliseconds();
-    if(previous_state==CALIBRATION && *s==WAITING)calibrated=1;
-    if(*s==EMERGENCY){halt();fault=4;calibrated=0;}
-    if(*s==CALIBRATION){calibrated=0;left_pwm=(uint16_t)OCR0B;right_pwm=(uint16_t)OCR0A;}
-    else if(*s!=EMERGENCY){
+
+void supervisor_after(STATE *state){
+
+    if(previous_state == CALIBRATION && *state == WAITING)
+        calibrated = 1;
+    if(*state == CALIBRATION || *state == EMERGENCY)
+        calibrated = 0;
+    if(*state != CALIBRATION && *state != RUNNING && *state != EMERGENCY){
+
         uint8_t value;
-        if(adc_read(sample,&value)){
-            if(++sample>6){sample=1;if(*s==RUNNING)follow_line(s);}
-        }
+        if(adc_read(sample, &value) && ++sample > 6)
+            sample = 1;
+
     }
-    if(*s==RUNNING)elapsed=uptime-race_start;
-    if(*s!=RUNNING && !manual && *s!=CALIBRATION)halt();
-    if((uint16_t)(now-last_telemetry)>=telemetry_ms){
-        static uint8_t diagnostic=1;
-        last_telemetry=now;status(*s);sensors();
-        uint8_t low,high,ok;calibration_get(diagnostic,&low,&high,&ok);
-        char b[40];snprintf(b,sizeof(b),"D,%u,%u,%u,%u",diagnostic,low,high,ok);
-        send(0,b,0);if(++diagnostic>6)diagnostic=1;
+
+    uint16_t now = timer1_elapsed_milliseconds();
+    if(monitor && (uint16_t)(now - last_telemetry) >= PERIOD_MS){
+
+        last_telemetry = now;
+        replies |= R_STATUS | R_SENSORS | R_DIAG;
+
     }
-    previous_state=*s;
+
+    transmit(*state);
+    previous_state = *state;
+
+}
+
+uint8_t supervisor_button_allowed(void){
+
+    return !manual && !estop;
+
+}
+
+uint8_t supervisor_emergency_active(void){
+
+    return estop;
+
+}
+
+const SUPERVISOR_GAINS *supervisor_get_gains(void){
+
+    return &gains;
+
 }

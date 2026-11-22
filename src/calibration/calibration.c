@@ -40,9 +40,6 @@ static void calibration_fault_step(STATE *state){
 
     timer1_start();
 
-    if(timer1_elapsed_seconds() & 1U)PORTB |= (1 << LED_L);
-    else PORTB &= ~(1 << LED_L);
-
     *state = EMERGENCY;
 
 }
@@ -86,7 +83,6 @@ void calibration_sensor(STATE *state){
         break;
 
     case CALIBRATION_FAULT:
-
         calibration_fault_step(state);
         break;
 
@@ -97,10 +93,18 @@ void calibration_sensor(STATE *state){
 
 }
 
-void calibration_get(uint8_t channel,uint8_t *low,uint8_t *high,uint8_t *approved){
-    if(channel>=SENSORS_QUANTITY)return;
-    *low=calibration.sensors[channel].min;
-    *high=calibration.sensors[channel].max;
-    *approved=calibration.sensors[channel].approved;
+void calibration_get(uint8_t channel, uint8_t *low, uint8_t *high, uint8_t *approved){
+
+    if(channel >= SENSORS_QUANTITY)return;
+
+    *low = calibration.sensors[channel].min;
+    *high = calibration.sensors[channel].max;
+    *approved = calibration.sensors[channel].approved;
+
 }
-uint8_t calibration_phase(void){return calibration.state_calibration;}
+
+uint8_t calibration_phase(void){
+
+    return calibration.state_calibration;
+
+}

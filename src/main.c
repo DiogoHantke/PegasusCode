@@ -1,35 +1,65 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <stdint.h>
 
 #include "pegasus_config.h"
 #include "adc_lib.h"
 #include "pwm_lib.h"
 #include "timer_lib.h"
 #include "calibration.h"
+#include "pegasus_system.h"
 
 #ifdef PEGASUS_SUPERVISOR
 #include "supervisor.h"
 #endif
 
-static void init_sys(void){
+static uint16_t emergency_time_init;
+static uint8_t emergency_initialized;
 
-    DDRD = (DDRD & ~(1 << BUTTON)) | (1 << MOTOR_R_IN1) | (1 << MOTOR_R_IN2) | (1 << MOTOR_L_PWM) | (1 << MOTOR_R_PWM);
-    DDRB |= (1 << MOTOR_L_IN1) | (1 << MOTOR_L_IN2) | (1 << LED_L) | (1 << SENSOR_ON);
+void led_emergency_reset(void){
 
-    PORTD &= ~(1 << BUTTON);
-    PORTB &= ~(1 << LED_L);
-    PORTB &= ~(1 << SENSOR_ON);
+    if(emergency_initialized){
 
-    adc_init();
-    pwm_init();
-    timer1_ctc_init();
-    timer1_interrupt_enable();
-    timer1_start();
-    #ifdef PEGASUS_SUPERVISOR
-    supervisor_init();
-    #endif
-    sei();
+        emergency_initialized = 0;
+        PORTB &= ~(1 << LED_L);
+
+    }
+
+}
+
+void led_emergency_update(void){
+
+    uint16_t now = timer1_elapsed_milliseconds();
+
+    if(!emergency_initialized){
+
+        emergency_time_init = now;
+        emergency_initialized = 1;
+
+    }
+
+    uint16_t elapsed = (uint16_t)(now - emergency_time_init);
+
+    if(elapsed >= 2000U){
+
+        emergency_time_init = now;
+        elapsed = 0;
+
+    }
+
+    if(elapsed < 100U || (elapsed >= 200U && elapsed < 300U)){
+        PORTB |= (1 << LED_L);
+
+    }else{
+        PORTB &= ~(1 << LED_L);
+    }
+
+}
+
+static void stop_motors(void){
+
+    pwm_set_duty(PWM_A, 0);
+    pwm_set_duty(PWM_B, 0);
+
 }
 
 int main(void){
@@ -38,101 +68,158 @@ int main(void){
 
     STATE state = INIT;
 
-    uint16_t time_init = 0;
-    uint16_t time_change = 0;
+    static uint16_t time_init;
+    static uint16_t time_change;
 
-    uint8_t button_last = 0;
-    uint8_t button_stable = 0;
-    uint8_t button_handled = 0;
+    static uint8_t button_last;
+    static uint8_t button_stable;
+    static uint8_t button_handled = 1;
+    static uint8_t button_armed;
 
     for(;;){
 
-        #ifdef PEGASUS_SUPERVISOR
-        supervisor_step(&state);
-        #endif
+        timer1_start();
 
+#ifdef PEGASUS_SUPERVISOR
+        supervisor_step(&state);
+#endif
         uint16_t now = timer1_elapsed_milliseconds();
         uint8_t button = (PIND >> BUTTON) & 1U;
+        uint8_t pressed = 0;
+        uint8_t released = 0;
+        uint8_t allowed = 1;
 
-        if(state == INIT || state == WAITING || state == EMERGENCY){
+#ifdef PEGASUS_SUPERVISOR
+        allowed = supervisor_button_allowed();
+#endif
 
-            timer1_start();
+        if(!allowed){
+            button_armed = 0;
+            button_handled = 1;
+        }
 
-            if(button != button_last){
+        if(button != button_last){
+            time_change = now;
+            button_last = button;
+        }
 
-                time_change = now;
-                button_last = button;
-            }
-
-            if((uint16_t)(now - time_change) >= BUTTON_DEBOUNCE_MS && button != button_stable){
-
-                button_stable = button;
-
-                if(button_stable){
-
+        if((uint16_t)(now - time_change) >= BUTTON_DEBOUNCE_MS && button != button_stable){
+            button_stable = button;
+            if(button_stable){
+                if(allowed && button_armed){
+                    pressed = 1;
                     time_init = time_change;
                     button_handled = 0;
-
-                }else if(!button_handled){
-
-                    button_handled = 1;
-
-                    if((uint16_t)(time_change - time_init) < BUTTON_TIMEOUT_SECONDS * 1000U){
-
-                        calibration_reset();
-                        state = CALIBRATION;
-                        PORTB |= (1 << LED_L);
-
-                    }else{
-
-                        state = WAITING;
-                    }
                 }
+            }else{
+                released = allowed && button_armed;
             }
+        }
+        if(allowed && !button && !button_stable){
 
-            if(button_stable && button && !button_handled && (uint16_t)(now - time_init) >= BUTTON_TIMEOUT_SECONDS * 1000U){
+            button_armed = 1;
 
-                button_handled = 1;
-                state = WAITING;
-            }
+        }
+        uint8_t emergency_active = state == EMERGENCY;
+#ifdef PEGASUS_SUPERVISOR
+        emergency_active |= supervisor_emergency_active();
+#endif
+        if(emergency_active){
+
+            led_emergency_update();
 
         }else{
 
-            button_last = button;
-            button_stable = button;
-            button_handled = 1;
-            time_change = now;
+            led_emergency_reset();
+
         }
 
         switch(state){
 
-        case CALIBRATION:
+        case INIT:
+            if(released && !button_handled){
+                button_handled = 1;
+                if((uint16_t)(time_change - time_init) < BUTTON_TIMEOUT_SECONDS * 1000U){
 
+                    calibration_reset();
+                    state = CALIBRATION;
+                    PORTB |= (1 << LED_L);
+
+                }else{
+                    state = WAITING;
+                }
+            }
+
+            if(allowed && button_armed && button_stable && button && !button_handled &&
+               (uint16_t)(now - time_init) >= BUTTON_TIMEOUT_SECONDS * 1000U){
+
+                button_handled = 1;
+                state = WAITING;
+
+            }
+            
+            break;
+
+        case CALIBRATION:
             calibration_sensor(&state);
+            break;
+
+        case WAITING:
+            if(pressed){
+                state = RUNNING;
+            }
+
+            break;
+
+        case RUNNING:
+            
+            break;
+
+        case FINISH:
+
+            stop_motors();
+
+            if(pressed){
+                button_handled = 1;
+                state = INIT;
+            }
+
+            break;
+
+        case STOP:
+
+            stop_motors();
+
+            if(pressed){
+                button_handled = 1;
+                state = INIT;
+            }
+
             break;
 
         case EMERGENCY:
 
-            calibration_sensor(&state);
+            stop_motors();
+            PORTB &= ~(1 << SENSOR_ON);
+
+            if(pressed){
+                button_handled = 1;
+                state = INIT;
+            }
+
             break;
-
-        case INIT:
-
-        case WAITING:
-
-        case RUNNING:
-
-        case FINISH:
-
-        case STOP:
 
         default:
-
             break;
         }
-        #ifdef PEGASUS_SUPERVISOR
-        supervisor_after(&state);
-        #endif
-    }
 
+        if(state != INIT){
+            button_handled = 1;
+        }
+
+#ifdef PEGASUS_SUPERVISOR
+        supervisor_after(&state);
+#endif
+
+    }
 }

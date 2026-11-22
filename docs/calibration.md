@@ -2,11 +2,11 @@
 
 [Início](../README.md) · [Compilação e testes](development.md)
 
-A implementação fica em `src/calibration/`, separada em coordenação (`calibration.c`), aquisição inicial (`calibration_initial.c`), diagnóstico (`calibration_diagnostic.c`), filtro (`calibration_filter.c`) e detecção (`calibration_detection.c`). Os dados e subestados são compartilhados somente entre esses módulos pelo header privado `calibration_internal.h`. A máquina de estados em `src/main.c` chama `calibration_sensor(&state)` em `CALIBRATION` e continua chamando em `EMERGENCY` para atualizar o LED de defeito.
+A implementação fica em `src/calibration/`, separada em coordenação (`calibration.c`), aquisição inicial (`calibration_initial.c`), diagnóstico (`calibration_diagnostic.c`), filtro (`calibration_filter.c`) e detecção (`calibration_detection.c`). Os dados e subestados são compartilhados somente entre esses módulos pelo header privado `calibration_internal.h`. A máquina de estados em `src/main.c` chama `calibration_sensor(&state)` em `CALIBRATION` e chama `led_emergency_update()` em `EMERGENCY` para atualizar o LED de defeito.
 
 ## Sequência implementada
 
-O `main.c` reconhece um toque curto no botão ativo alto: pressionar e soltar antes de dois segundos, com debounce de 30 ms. Segurar por dois segundos leva a `WAITING`, sem iniciar a calibração. Com acionamento, a calibração reinicia os oito sensores com mínimo 255, máximo zero e filtro zerado, liga emissores e LED L e solicita 20% de PWM nos dois motores.
+O `main.c` reconhece um toque curto no botão ativo alto: pressionar e soltar antes de dois segundos, com debounce de 500 ms. Segurar por dois segundos leva a `WAITING`, sem iniciar a calibração. Com acionamento, a calibração reinicia os oito sensores com mínimo 255, máximo zero e filtro zerado, liga emissores e LED L e solicita 20% de PWM nos dois motores.
 
 1. **Frontal:** avança em linha reta e executa o filtro para QTR01–QTR06 ainda não aprovados. Passa aos laterais quando todos os frontais estão aprovados ou quando um frontal confirma a passagem de branco para preto. Os aprovados continuam disponíveis para leitura, preservando os extremos.
 2. **Lateral:** continua o mesmo avanço, sem parar ou inverter na troca de grupo. Executa o filtro para QTR00 e QTR07 ainda não aprovados. Para e entra no diagnóstico quando ambos estão aprovados ou quando um lateral confirma branco seguido de preto.
@@ -40,7 +40,7 @@ Cada trecho possui timeout nominal definido por `CAL_TIMEOUT_SECONDS` (atualment
 
 ## LED e dados em RAM
 
-O LED L permanece aceso durante a calibração. Só apaga quando todos os sensores estiverem aprovados; a calibração para o Timer1 e o estado global passa para `WAITING`. A aplicação retoma o timer para acompanhar o botão. Em falha, os motores param, os emissores desligam e o LED alterna a cada segundo. O Timer1 continua ativo para produzir essa indicação em `EMERGENCY`.
+O LED L permanece aceso durante a calibração. Só apaga quando todos os sensores estiverem aprovados; a calibração para o Timer1 e o estado global passa para `WAITING`. O laço principal mantém o timer ativo para acompanhar o botão e a sinalização, independentemente do Bluetooth. Em falha, os motores param, os emissores desligam e o LED acende entre 250–500 ms e 750–1000 ms de cada ciclo de 2000 ms. A sinalização é cooperativa, sem espera; o ciclo reinicia a cada entrada em EMERGENCY e trata a virada do contador de 16 bits. O Timer1 continua ativo para produzir essa indicação em `EMERGENCY`.
 
 Os limites ficam somente na RAM e são perdidos ao desligar ou reiniciar. Não há leitura nem escrita em EEPROM. Em WAITING ou EMERGENCY, solte o botão e faça um novo toque curto para iniciar uma nova calibração. Não há início automático de corrida.
 

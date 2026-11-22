@@ -2,9 +2,22 @@
 
 #include "adc_lib.h"
 
-static uint8_t latest[8], valid;
-uint8_t adc_latest(uint8_t channel){return channel<8?latest[channel]:0;}
-uint8_t adc_valid_mask(void){return valid;}
+static uint8_t latest[8];
+static uint8_t valid;
+
+uint8_t adc_latest(uint8_t channel){
+
+    if(channel >= 8)return 0;
+
+    return latest[channel];
+
+}
+
+uint8_t adc_valid_mask(void){
+
+    return valid;
+
+}
 
 void adc_init(void){
 
@@ -29,7 +42,8 @@ uint8_t adc_read(uint8_t channel, uint8_t *value){
 
         if (active_channel == channel){
 
-            latest[channel]=result;valid |= 1U<<channel;
+            latest[channel] = result;
+            valid |= 1U << channel;
             *value = result;
             return 1;
         }

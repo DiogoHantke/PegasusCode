@@ -4,13 +4,24 @@
 
 Firmware em C para o robô seguidor de linha Pegasus, com ATmega328P a 16 MHz, oito sensores analógicos e driver de motores TB6612FNG. Usa acesso direto aos registradores, sem framework Arduino.
 
-A implementação atual faz calibração frontal e lateral, diagnóstico e até três ciclos de recalibração dos sensores reprovados. O controle de corrida ainda não está implementado; após calibrar, o robô permanece parado em `WAITING`.
+A implementação faz calibração frontal e lateral, diagnóstico e até três ciclos de recalibração dos sensores reprovados. O [Pegasus Supervisor](supervisor/README.md) acrescenta interface Python/Tkinter fiel ao HTML de referência, comunicação Bluetooth bidirecional, comunicação básica para sensores/calibração, parâmetros PID em RAM e ensaio manual WASD. Após calibrar, o robô permanece parado até um comando explícito. O firmware de corrida, a aplicação dos ganhos PID ao controle e a detecção física de voltas estão pendentes de desenvolvimento pelo usuário.
+
+## Supervisório desktop
+
+```sh
+cd supervisor
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+./run.sh --simulate
+```
+
+Para hardware real, execute `./run.sh`, selecione porta/baud e aguarde a identificação do firmware. Veja [instalação, Bluetooth e operação](supervisor/README.md), [protocolo](docs/supervisor-protocol.md), [integração](docs/supervisor-integration.md) e [validação](docs/validation/README.md). O padrão embarcado é 9600 baud, configurável em `platformio.ini`; o módulo Bluetooth precisa ter a mesma configuração.
 
 ## Operação
 
 Ao ligar, os motores ficam parados. Pressione e solte o botão D2 antes de dois segundos para iniciar a calibração. Segurar por dois segundos leva a `WAITING`, sem calibrar. O botão é ativo alto, com pull-down externo.
 
-O LED permanece aceso durante a calibração, apaga no sucesso e pisca em caso de falha. Para recalibrar após sucesso ou falha, solte o botão e faça um novo toque curto. O debounce exige 30 ms de estabilidade em cada borda.
+O LED permanece aceso durante a calibração, apaga no sucesso e, em EMERGENCY, faz duas piscadas de 250 ms a cada ciclo de 2 segundos. O debounce exige 500 ms de estabilidade em cada borda; toques menores podem ser ignorados. WAITING exige uma nova pressão para entrar em RUNNING, cuja rotina ainda está vazia. Em FINISH, STOP ou EMERGENCY, uma nova pressão retorna a INIT; uma pressão posterior inicia nova calibração. ESTOP travado exige REARM pelo supervisório e não pode ser liberado pelo botão.
 
 Os limites dos sensores ficam somente na RAM. Desligar ou reiniciar exige nova calibração; não há salvamento ou restauração em EEPROM.
 

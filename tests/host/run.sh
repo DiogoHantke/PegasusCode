@@ -9,7 +9,7 @@ for polarity in 0 1; do
         "$test_binary" "$scenario"
     done
 done
-"${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -Itests/host -Iinclude -Ilib/adc -Ilib/pwm -Ilib/timer tests/host/main_test.c -o "$test_binary"
-for scenario in short long bounce wrap-short wrap-long retry-success retry-fault long-retry busy; do
+"${CC:-cc}" -std=c11 -O2 -Wall -Wextra -Werror -DPEGASUS_SUPERVISOR -Itests/host -Iinclude -Ilib/adc -Ilib/pwm -Ilib/timer tests/host/main_test.c src/communication/system_init.c -o "$test_binary"
+for scenario in short long bounce wrap-short wrap-long retry-success retry-fault long-retry busy manual estop emergency boot-held; do
     "$test_binary" "$scenario"
 done

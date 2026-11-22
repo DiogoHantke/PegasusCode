@@ -30,7 +30,7 @@ QTR01 é o identificador de um canal da malha no firmware. Ele não comprova, po
 | PWM chamado direito | D6 / PD6 / OC0A | PWM_A |
 | Direção chamada direita | D4/PD4 e D7/PD7 | IN1 e IN2 |
 | Frontais | ADC1–ADC6 | QTR01–QTR06 |
-| Laterais | ADC0 e ADC7 | QTR00/QTR07; posição física a confirmar |
+| Laterais | ADC0 e ADC7 | QTR00=HR em A0, QTR07=HL em A7 no esquema; confirmar montagem |
 | Emissores | D11/PB3 | SENSOR_ON |
 | Botão | D2/PD2 | Ativo alto; pull-up interno desabilitado |
 | LED | D13/PB5 | Indicador de inicialização/calibração |
