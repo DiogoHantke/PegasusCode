@@ -30,17 +30,18 @@ O ADC oferece dez bits na corrida e oito bits na calibracao.
 
 O calculo segue `Main (1).ino`: A6..A1, normalizacao em 0..100, pesos -2.5 a
 +2.5 e PD `erro * 1.2 + (erro - erro_anterior) * 4.3`. O limite de correcao
-e 250 em reta e 110 em curva. Os comandos sao base menos correcao na
-esquerda e base mais correcao na direita, com PWM maximo 80/255. A base e 80
+e 250 em reta e 110 em curva. Os comandos sao base mais correcao na
+esquerda e base menos correcao na direita, com PWM maximo 80/255. A base e 80
 em reta e 46 em curva. O controle atualiza a cada 5 ms.
 
-`CAL_WHITE_HIGH=1` segue o map do sketch: ADC menor corresponde a preto.
-Pode ser invertido para sensores de polaridade oposta. O motor esquerdo
+O Pegasus segue a faixa branca. Com `CAL_WHITE_HIGH=0`, leituras
+proximas do minimo calibrado representam o branco. Use 1 para sensores
+de polaridade oposta. O motor esquerdo
 avanca com IN2 alto e o direito com IN1 alto, conforme a montagem espelhada.
 
-Canais sem contraste valido sao ignorados. O limiar de presenca de linha e
-proporcional ao numero de frontais aproveitados; um canal falho nao cancela
-os demais. Sem qualquer frontal utilizavel, nao existe posicao para o PID.
+Canais sem contraste valido sao ignorados. Um frontal valido com leitura
+de branco normalizada de pelo menos 25 basta para detectar linha. Somente
+frontais que atendem a esse limiar entram no calculo da posicao.
 Sem linha detectada, o PWM zera no primeiro quadro; apos 150 ms o estado
 e EMERGENCY. Falta de resposta do ADC por 100 ms tambem para os motores.
 
@@ -48,7 +49,7 @@ As marcas seguem A7 >= 30 e A0 <= 30, com 120 ms de confirmacao. A chegada
 requer nove segundos desde a partida, saida da marca inicial e nova marca
 A0 <= 30 por 120 ms. O cruzamento com cinco ou mais frontais ativos inibe
 marcas enquanto e visto. A chegada em A0 permanece bloqueada por dois
-segundos apos a ultima leitura de cruzamento ou de branco nos seis
+segundos apos a ultima leitura de cruzamento ou de fundo escuro nos seis
 frontais. A confirmacao de 120 ms da chegada comeca apos esse bloqueio.
 Um lateral sem calibracao desabilita a funcao correspondente sem impedir
 corrida; com A0 falho, a parada final deve ser feita pelo botao.

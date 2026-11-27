@@ -44,10 +44,11 @@ static int position_reference(void){
         if(raw < 40)raw = 40;
         if(raw > 920)raw = 920;
         s[i] = (raw - 40) * 100 / (920 - 40);
-        if(CAL_WHITE_HIGH)s[i] = 100 - s[i];
+        if(!CAL_WHITE_HIGH)s[i] = 100 - s[i];
+        if(s[i] < (int)LINE_ACTIVE_THRESHOLD)s[i] = 0;
         sum += s[i];
     }
-    assert(sum > 100);
+    assert(sum > 0);
     int prom = -2.5*s[0] -1.5*s[1] -0.5*s[2] +0.5*s[3] +1.5*s[4] +2.5*s[5];
     return (int)(100.0 * prom / sum);
 }
@@ -75,11 +76,11 @@ int main(void){
             seed = seed * 1664525UL + 1013904223UL;
             values[c] = (seed >> 16) % 1024;
         }
-        values[1 + frame % 6] = CAL_WHITE_HIGH ? 40 : 920;
-        values[1 + (frame + 1) % 6] = CAL_WHITE_HIGH ? 40 : 920;
+        values[1 + frame % 6] = CAL_WHITE_HIGH ? 920 : 40;
+        values[1 + (frame + 1) % 6] = CAL_WHITE_HIGH ? 920 : 40;
         int correction = pid_reference(position_reference());
-        int expected_left = constrain_motor(LINE_BASE_SPEED - correction);
-        int expected_right = constrain_motor(LINE_BASE_SPEED + correction);
+        int expected_left = constrain_motor(LINE_BASE_SPEED + correction);
+        int expected_right = constrain_motor(LINE_BASE_SPEED - correction);
         now += LINE_PERIOD_MS;
         for(unsigned call = 0; call < 16; call++)line_follower_step(&state);
         assert(state == RUNNING);

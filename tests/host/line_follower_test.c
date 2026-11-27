@@ -39,8 +39,8 @@ static int16_t left_command(void){
 static int16_t right_command(void){
     return PORTD & (1 << MOTOR_R_IN1) ? right : -(int16_t)right;
 }
-static void black(uint8_t channel, uint8_t percent){
-    if(CAL_WHITE_HIGH)percent = 100 - percent;
+static void white(uint8_t channel, uint8_t percent){
+    if(!CAL_WHITE_HIGH)percent = 100 - percent;
     values[channel] = (20U + percent * 2U) * 4U;
 }
 /* Uma varredura completa por ms, com conversoes assincronas. */
@@ -52,9 +52,9 @@ static void wait_ms(unsigned duration){
     while(duration--)tick();
 }
 static void center(void){
-    for(uint8_t c = 0; c < 8; c++)black(c, 0);
-    black(3, 100);
-    black(4, 100);
+    for(uint8_t c = 0; c < 8; c++)white(c, 0);
+    white(3, 100);
+    white(4, 100);
     values[QTR00_L] = 1023;
     values[QTR07_L] = 0;
 }
@@ -87,32 +87,32 @@ int main(void){
 
     /* Erro +10: PD do sketch (1.2/4.3), seguido da parcela proporcional. */
     setup(0);
-    black(3, 90);
-    black(4, 60);
+    white(3, 90);
+    white(4, 60);
     tick(); /* A alteracao entra no proximo passo, sem filtro de amostras. */
-    assert(left_command() == 25 && right_command() == 80);
+    assert(left_command() == 80 && right_command() == 25);
     wait_ms(5);
-    assert(left_command() == 68 && right_command() == 80);
+    assert(left_command() == 80 && right_command() == 68);
     setup(0);
 
     /* Um unico quadro com desvio aparece na correcao, sem atenuacao temporal. */
-    black(6, 100);
+    white(6, 100);
     tick();
-    assert(left_command() > right_command());
-    black(6, 0);
+    assert(right_command() > left_command());
+    white(6, 0);
     wait_ms(10);
     assert(left == 80 && right == 80);
-    for(uint8_t c = 1; c <= 6; c++)black(c, c >= 5 ? 100 : 0);
-    wait_ms(40);
-    assert(left_command() > right_command());
-    setup(0);
-    for(uint8_t c = 1; c <= 6; c++)black(c, c <= 2 ? 100 : 0);
+    for(uint8_t c = 1; c <= 6; c++)white(c, c >= 5 ? 100 : 0);
     wait_ms(40);
     assert(right_command() > left_command());
+    setup(0);
+    for(uint8_t c = 1; c <= 6; c++)white(c, c <= 2 ? 100 : 0);
+    wait_ms(40);
+    assert(left_command() > right_command());
 
     /* Perda na leitura direta para no primeiro quadro; recuperacao breve nao trava. */
     setup(0);
-    for(uint8_t c = 1; c <= 6; c++)black(c, 0);
+    for(uint8_t c = 1; c <= 6; c++)white(c, 0);
     tick();
     assert(state == RUNNING && left == 0 && right == 0);
     wait_ms(35);
@@ -121,8 +121,8 @@ int main(void){
     wait_ms(40);
     assert(state == RUNNING && left == 80 && right == 80);
 
-    /* Laterais pretos nao escondem perda frontal; emergencia nao rearma sozinha. */
-    for(uint8_t c = 1; c <= 6; c++)black(c, 0);
+    /* Marcas laterais nao escondem perda frontal; emergencia nao rearma sozinha. */
+    for(uint8_t c = 1; c <= 6; c++)white(c, 0);
     values[QTR07_L] = 30;
     tick();
     wait_ms(LINE_LOST_TIMEOUT_MS - 1);
@@ -134,9 +134,16 @@ int main(void){
     wait_ms(300);
     assert(state == EMERGENCY && left == 0 && right == 0);
 
+    /* Uma faixa branca estreita com fundo levemente refletivo ainda orienta para A6. */
+    begin(0);
+    for(uint8_t c = 1; c <= 6; c++)white(c, LINE_ACTIVE_THRESHOLD - 2U);
+    white(6, 100);
+    wait_ms(LINE_LOST_TIMEOUT_MS + 1U);
+    assert(state == RUNNING && right_command() > left_command());
+
     /* Sem linha na partida nunca movimenta. */
     begin(0);
-    for(uint8_t c = 1; c <= 6; c++)black(c, 0);
+    for(uint8_t c = 1; c <= 6; c++)white(c, 0);
     wait_ms(LINE_LOST_TIMEOUT_MS + 1);
     assert(state == EMERGENCY && left == 0 && right == 0);
 
@@ -160,14 +167,14 @@ int main(void){
     setup(0);
     values[QTR00_L] = 30;
     values[QTR07_L] = 30;
-    for(uint8_t c = 1; c <= 6; c++)black(c, 100);
+    for(uint8_t c = 1; c <= 6; c++)white(c, 100);
     wait_ms(9500);
     assert(state == RUNNING && left == 80 && right == 80);
 
     /* A0 continua bloqueado apos sair do cruzamento, inclusive na virada do timer. */
     setup(55000U);
     wait_ms(LINE_FINISH_DELAY_MS);
-    for(uint8_t c = 1; c <= 6; c++)black(c, 100);
+    for(uint8_t c = 1; c <= 6; c++)white(c, 100);
     values[QTR00_L] = 30;
     wait_ms(1000);
     assert(state == RUNNING);
@@ -181,10 +188,10 @@ int main(void){
     wait_ms(LINE_MARKER_DEBOUNCE_MS + LINE_PERIOD_MS);
     assert(state == FINISH && left == 0 && right == 0);
 
-    /* Seis frontais no branco bloqueiam A0 mesmo apos a linha reaparecer. */
+    /* Seis frontais no fundo escuro bloqueiam A0 mesmo apos a linha reaparecer. */
     setup(0);
     wait_ms(LINE_FINISH_DELAY_MS);
-    for(uint8_t c = 1; c <= 6; c++)black(c, 0);
+    for(uint8_t c = 1; c <= 6; c++)white(c, 0);
     values[QTR00_L] = 30;
     wait_ms(20);
     center();
@@ -217,7 +224,7 @@ int main(void){
 
     /* Reinicio e perda de linha atravessando a virada de uint16_t. */
     setup(65460U);
-    for(uint8_t c = 1; c <= 6; c++)black(c, 0);
+    for(uint8_t c = 1; c <= 6; c++)white(c, 0);
     wait_ms(LINE_LOST_TIMEOUT_MS + 1);
     assert(state == EMERGENCY && left == 0 && right == 0);
     setup(65520U);

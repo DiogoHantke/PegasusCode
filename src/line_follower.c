@@ -118,7 +118,7 @@ static uint8_t normalize_sensor(uint8_t channel, uint16_t raw, uint8_t *value){
     if(raw > maximum)raw = maximum;
 
     uint8_t scaled = (uint32_t)(raw - minimum) * 100U / (maximum - minimum);
-    *value = CAL_WHITE_HIGH ? 100U - scaled : scaled;
+    *value = CAL_WHITE_HIGH ? scaled : 100U - scaled;
 
     return 1;
 
@@ -261,17 +261,17 @@ void line_follower_step(STATE *state){
 
     uint16_t sum = 0;
     int16_t weighted = 0;
-    uint8_t active = 0, white = 0, available = 0;
+    uint8_t active = 0, available = 0;
 
     for(uint8_t index = 0; index < 6; index++){
 
         if(!(valid_mask & (1U << (QTR06_F - index))))continue;
         available++;
         uint8_t sensor = samples[QTR06_F - index];
+        if(sensor < LINE_ACTIVE_THRESHOLD)continue;
+        active++;
         sum += sensor;
         weighted += (int16_t)(2 * (int16_t)index - 5) * sensor;
-        if(sensor >= LINE_ACTIVE_THRESHOLD)active++;
-        else white++;
 
     }
 
@@ -279,10 +279,9 @@ void line_follower_step(STATE *state){
         line_fault(state);
         return;
     }
-    /* Mantem sum > 100 com seis sensores; ajusta a exigencia aos restantes. */
-    uint8_t online = sum * 6U > LINE_PRESENT_SUM * available;
+    uint8_t online = active != 0;
     uint8_t crossing = active >= 5U;
-    if(crossing || white == 6U){
+    if(crossing || (!active && available == 6U)){
         finish_inhibited = 1;
         finish_inhibited_since = now;
         marker_pending = 0;
@@ -327,8 +326,9 @@ void line_follower_step(STATE *state){
     int16_t base = curve ? LINE_CURVE_SPEED : LINE_BASE_SPEED;
     int16_t limit = curve ? LINE_CURVE_TURN_LIMIT : LINE_TURN_LIMIT;
     int16_t correction = pid_line(position, LINE_KP, LINE_KD, limit);
-    int16_t left = base - correction;
-    int16_t right = base + correction;
+    /* Erro negativo aponta para A6 e reduz a velocidade da roda esquerda. */
+    int16_t left = base + correction;
+    int16_t right = base - correction;
 
     /* Como no loop do sketch, a marca altera a velocidade do proximo passo. */
     curve_line(now, crossing);

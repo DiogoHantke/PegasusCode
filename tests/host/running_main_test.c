@@ -31,11 +31,11 @@ uint8_t adc_read_10(uint8_t channel, uint16_t *value){
     if(no_adc)return 0;
     pending = !pending;
     if(pending)return 0;
-    uint8_t black;
-    if(app_state() == CALIBRATION)black = (now / 400) & 1U;
-    else black = channel == 3 || channel == 4;
-    if(losing)black = 0;
-    *value = (black != CAL_WHITE_HIGH) ? 880 : 80;
+    uint8_t white;
+    if(app_state() == CALIBRATION)white = (now / 400) & 1U;
+    else white = channel == 3 || channel == 4;
+    if(losing)white = 0;
+    *value = (white == CAL_WHITE_HIGH) ? 880 : 80;
     if(app_state() != CALIBRATION){
         if(channel == 0)*value = 1023;
         if(channel == 7)*value = 0;
