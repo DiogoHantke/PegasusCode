@@ -15,7 +15,7 @@ para os motores; soltar nao reinicia. O botao mantem o D2 da montagem.
 
 A calibracao automatica dura cerca de 5,2 segundos e aproveita os frontais
 validos mesmo com outros canais falhos. O PID usa Kp=1.2, Kd=4.3 e a formula
-de `Main (1).ino`. A corrida usa leitura direta e PWM maximo 80/255.
+de `Main (1).ino`. A corrida usa leitura direta e PWM maximo 200/255.
 
 ## Compilar, testar e gravar
 

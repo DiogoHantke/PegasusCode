@@ -68,7 +68,7 @@ static void begin(uint16_t time){
 static void setup(uint16_t time){
     begin(time);
     wait_ms(30);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
 }
 int main(void){
     /* Nao interfere com os motores da calibracao fora da corrida. */
@@ -80,7 +80,7 @@ int main(void){
     assert(left == 0 && right == 0); /* Ainda falta A0 no primeiro quadro. */
     line_follower_step(&state);
     line_follower_step(&state);
-    assert(left == 80 && right == 80); /* Primeiro quadro, sem janela de media. */
+    assert(left == LINE_BASE_SPEED && right == LINE_BASE_SPEED); /* Primeiro quadro, sem janela de media. */
     assert((PORTB & (1 << MOTOR_L_IN2)) && !(PORTB & (1 << MOTOR_L_IN1)));
     assert((PORTD & (1 << MOTOR_R_IN1)) && !(PORTD & (1 << MOTOR_R_IN2)));
     assert(PORTB & (1 << SENSOR_ON));
@@ -90,9 +90,9 @@ int main(void){
     black(3, 90);
     black(4, 60);
     tick(); /* A alteracao entra no proximo passo, sem filtro de amostras. */
-    assert(left_command() == 25 && right_command() == 80);
+    assert(left_command() == LINE_BASE_SPEED - 55 && right_command() == (int16_t)MOTOR_PWM_MAX);
     wait_ms(5);
-    assert(left_command() == 68 && right_command() == 80);
+    assert(left_command() == LINE_BASE_SPEED - 12 && right_command() == (int16_t)MOTOR_PWM_MAX);
     setup(0);
 
     /* Um unico quadro com desvio aparece na correcao, sem atenuacao temporal. */
@@ -101,7 +101,7 @@ int main(void){
     assert(left_command() > right_command());
     black(6, 0);
     wait_ms(10);
-    assert(left == 80 && right == 80);
+    assert(left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     for(uint8_t c = 1; c <= 6; c++)black(c, c >= 5 ? 100 : 0);
     wait_ms(40);
     assert(left_command() > right_command());
@@ -119,7 +119,7 @@ int main(void){
     assert(left == 0 && right == 0);
     center();
     wait_ms(40);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
 
     /* Laterais pretos nao escondem perda frontal; emergencia nao rearma sozinha. */
     for(uint8_t c = 1; c <= 6; c++)black(c, 0);
@@ -140,12 +140,12 @@ int main(void){
     wait_ms(LINE_LOST_TIMEOUT_MS + 1);
     assert(state == EMERGENCY && left == 0 && right == 0);
 
-    /* Flanco lateral direto e estavel alterna 80/46 uma unica vez. */
+    /* Flanco lateral direto e estavel alterna entre reta e curva uma unica vez. */
     setup(0);
     values[QTR00_L] = 30;
     values[QTR07_L] = 30;
     wait_ms(LINE_MARKER_DEBOUNCE_MS - 1);
-    assert(left == 80 && right == 80);
+    assert(left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     wait_ms(60);
     assert(left == 46 && right == 46);
     wait_ms(200);
@@ -154,7 +154,7 @@ int main(void){
     wait_ms(180);
     values[QTR07_L] = 30;
     wait_ms(180);
-    assert(left == 80);
+    assert(left == LINE_BASE_SPEED);
 
     /* Cruzamento nao alterna velocidade nem finaliza. */
     setup(0);
@@ -162,7 +162,7 @@ int main(void){
     values[QTR07_L] = 30;
     for(uint8_t c = 1; c <= 6; c++)black(c, 100);
     wait_ms(9500);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
 
     /* Quatro frontais bloqueiam A0 no cruzamento e apos sair, mesmo na virada do timer. */
     setup(55000U);
@@ -175,7 +175,7 @@ int main(void){
     center();
     values[QTR00_L] = 30;
     wait_ms(LINE_FINISH_CROSSING_HOLD_MS - 1U);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     values[QTR00_L] = 31;
     wait_ms(10);
     values[QTR00_L] = 30;
@@ -189,10 +189,10 @@ int main(void){
     wait_ms(LINE_PERIOD_MS);
     for(uint8_t c = 1; c <= 6; c++)black(c, 0);
     wait_ms(20);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     center();
     wait_ms(LINE_PERIOD_MS);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
 
     /* Uma perda persistente apos o cruzamento ainda leva a emergencia. */
     black(2, 100);
@@ -200,7 +200,7 @@ int main(void){
     wait_ms(LINE_PERIOD_MS);
     for(uint8_t c = 1; c <= 6; c++)black(c, 0);
     wait_ms(LINE_LOST_TIMEOUT_MS - 1U);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     wait_ms(2);
     assert(state == EMERGENCY && left == 0 && right == 0);
 
@@ -213,7 +213,7 @@ int main(void){
     center();
     values[QTR00_L] = 30;
     wait_ms(LINE_FINISH_CROSSING_HOLD_MS - 1U);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     wait_ms(LINE_MARKER_DEBOUNCE_MS + LINE_PERIOD_MS);
     assert(state == FINISH && left == 0 && right == 0);
 
@@ -260,7 +260,7 @@ int main(void){
         values[QTR07_L] = i % 2 ? 0 : 1023;
         tick();
     }
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     /* Desabilitar corrida interrompe PWM e reinicia a aquisicao na proxima partida. */
     setup(0);
     state = STOP;
@@ -273,7 +273,7 @@ int main(void){
     values[0] = 0;
     values[7] = 1023;
     wait_ms(10000);
-    assert(state == RUNNING && left == 80 && right == 80);
+    assert(state == RUNNING && left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     setup(0);
     failed_mask = 0x7EU & ~(1U << 3);
     wait_ms(1000);

@@ -31,7 +31,7 @@ O ADC oferece dez bits na corrida e oito bits na calibracao.
 O calculo segue `Main (1).ino`: A6..A1, normalizacao em 0..100, pesos -2.5 a
 +2.5 e PD `erro * 1.2 + (erro - erro_anterior) * 4.3`. O limite de correcao
 e 250 em reta e 110 em curva. Os comandos sao base menos correcao na
-esquerda e base mais correcao na direita, com PWM maximo 80/255. A base e 80
+esquerda e base mais correcao na direita, com PWM maximo 200/255. A base e 200
 em reta e 46 em curva. O controle atualiza a cada 5 ms.
 
 `CAL_WHITE_HIGH=1` segue o map do sketch: ADC menor corresponde a preto.

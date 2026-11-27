@@ -39,13 +39,13 @@
 #define CAL_REVERSE_PAUSE_MS 200U
 #define CAL_PWM 51U
 
-/* Corrida: mesma expressao PD do .ino, limitada a 80/255. */
-#define MOTOR_PWM_MAX 80U
+/* Corrida: mesma expressao PD do .ino, limitada a 200/255. */
+#define MOTOR_PWM_MAX 200U
 #define MOTOR_L_FORWARD MOTOR_L_IN2
 #define MOTOR_L_REVERSE MOTOR_L_IN1
 #define MOTOR_R_FORWARD MOTOR_R_IN1
 #define MOTOR_R_REVERSE MOTOR_R_IN2
-#define LINE_BASE_SPEED 80
+#define LINE_BASE_SPEED 200
 #define LINE_CURVE_SPEED 46
 #define LINE_TURN_LIMIT 250
 #define LINE_CURVE_TURN_LIMIT 110
