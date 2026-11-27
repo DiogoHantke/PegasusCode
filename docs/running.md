@@ -31,8 +31,8 @@ O ADC oferece dez bits na corrida e oito bits na calibracao.
 O calculo segue `Main (1).ino`: A6..A1, normalizacao em 0..100, pesos -2.5 a
 +2.5 e PD `erro * 1.2 + (erro - erro_anterior) * 4.3`. O limite de correcao
 e 250 em reta e 110 em curva. Os comandos sao base mais correcao na
-esquerda e base menos correcao na direita, com PWM maximo 80/255. A base e 80
-em reta e 46 em curva. O controle atualiza a cada 5 ms.
+esquerda e base menos correcao na direita. O PWM maximo e de 70% (179/255).
+A base e 179 em reta e 46 em curva. O controle atualiza a cada 5 ms.
 
 O Pegasus segue a faixa branca. Com `CAL_WHITE_HIGH=0`, leituras
 proximas do minimo calibrado representam o branco. Use 1 para sensores
@@ -45,8 +45,9 @@ frontais que atendem a esse limiar entram no calculo da posicao.
 Sem linha detectada, o PWM zera no primeiro quadro; apos 150 ms o estado
 e EMERGENCY. Falta de resposta do ADC por 100 ms tambem para os motores.
 
-A7 confirma a chegada quando sai da marca inicial e depois le 30 ou
-menos durante 120 ms. O limite e aplicado diretamente ao ADC de A7.
+A7 arma a chegada ao ler 80 ou mais fora da marca. Depois, uma leitura
+de 60 ou menos durante 20 ms confirma a chegada. Os limites usam o ADC
+bruto de A7, na escala de 0 a 1023.
 Quatro ou mais frontais ativos caracterizam cruzamento. A7 fica
 bloqueado durante o cruzamento e por 2 s apos a ultima leitura dele.
 Uma marca lida durante o bloqueio exige sair dela antes de confirmar

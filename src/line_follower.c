@@ -163,7 +163,7 @@ static void curve_line(uint16_t now, uint8_t crossing){
 
     /* A0 marca curva enquanto A7 esta fora da marca de parada. */
     uint8_t side = !crossing && side_value <= LINE_MARKER_RAW_THRESHOLD &&
-                   stop_value > LINE_MARKER_RAW_THRESHOLD;
+                   stop_value > LINE_FINISH_RAW_THRESHOLD;
 
     if(side != marker_candidate){
 
@@ -183,9 +183,13 @@ static void curve_line(uint16_t now, uint8_t crossing){
 
 static uint8_t finish_line(uint16_t now){
 
-    if(stop_value > LINE_MARKER_RAW_THRESHOLD){
+    if(stop_value >= LINE_FINISH_RELEASE_RAW_THRESHOLD){
 
         finish_armed = 1;
+        marker_pending = 0;
+
+    }else if(stop_value > LINE_FINISH_RAW_THRESHOLD){
+
         marker_pending = 0;
 
     }else if(finish_inhibited){
@@ -201,7 +205,7 @@ static uint8_t finish_line(uint16_t now){
 
         }
 
-        if((uint16_t)(now - finish_changed) >= LINE_MARKER_DEBOUNCE_MS)return 1;
+        if((uint16_t)(now - finish_changed) >= LINE_FINISH_DEBOUNCE_MS)return 1;
 
     }else{
 
