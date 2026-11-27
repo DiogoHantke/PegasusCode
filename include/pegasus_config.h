@@ -4,6 +4,8 @@
 #define SENSORS_QUANTITY 8
 
 #define BUTTON PD2 //D2
+#define BUTTON_ACTIVE_HIGH 1U
+#define BUZZER PB2 //D10
 
 #define MOTOR_L_PWM   PD5 //D5
 #define MOTOR_L_IN1   PB0 //D8
@@ -22,17 +24,45 @@
 
 #define CAL_SAMPLES 10
 #define CAL_CONFIRM_TOLERANCE 10
-#define CAL_MIN_CONTRAST 40
+#define CAL_MIN_CONTRAST 20
 #define CAL_LINE_THRESHOLD 128U
 #define CAL_TIMEOUT_SECONDS 3U
 #define MOTOR_REVERSE_DELAY_SECONDS 2U
 #define RECALIBRATION_CYCLES 3U
-#define THRESHOLD_LINE 50
+#define THRESHOLD_LINE 100
 #define PERCENT_MOTOR_CALIBRATE 20
 #define BUTTON_TIMEOUT_SECONDS 2U
+#define BUTTON_DEBOUNCE_MS 25U
+#define BUTTON_SHORT_MS 1000U
+#define BUTTON_LONG_MS 2000U
+#define CAL_LEG_MS 2500U
+#define CAL_REVERSE_PAUSE_MS 200U
+#define CAL_PWM 51U
+
+/* Corrida: mesma expressao PD do .ino, limitada a 80/255. */
+#define MOTOR_PWM_MAX 80U
+#define MOTOR_L_FORWARD MOTOR_L_IN2
+#define MOTOR_L_REVERSE MOTOR_L_IN1
+#define MOTOR_R_FORWARD MOTOR_R_IN1
+#define MOTOR_R_REVERSE MOTOR_R_IN2
+#define LINE_BASE_SPEED 80
+#define LINE_CURVE_SPEED 46
+#define LINE_TURN_LIMIT 250
+#define LINE_CURVE_TURN_LIMIT 110
+#define LINE_KP 1.2f
+#define LINE_KD 4.3f
+#define LINE_PERIOD_MS 5U
+#define LINE_ADC_TIMEOUT_MS 100U
+#define LINE_LOST_TIMEOUT_MS 150U
+#define LINE_PRESENT_SUM 100U
+#define LINE_ACTIVE_THRESHOLD 10U
+#define LINE_FINISH_DELAY_MS 9000U
+#define LINE_FINISH_CROSSING_HOLD_MS 2000U
+#define LINE_MARKER_DEBOUNCE_MS 120U
+#define LINE_MARKER_RAW_THRESHOLD 30U
 
 #ifndef CAL_WHITE_HIGH
-#define CAL_WHITE_HIGH 0
+#define CAL_WHITE_HIGH 1
 #endif
 
 #define QTR00_L 0x00
@@ -43,21 +73,5 @@
 #define QTR05_F 0x05
 #define QTR06_F 0x06
 #define QTR07_L 0x07
-
-void init_sys(void){
-    DDRD = (DDRD & ~(1 << BUTTON)) | (1 << MOTOR_R_IN1) | (1 << MOTOR_R_IN2) | (1 << MOTOR_L_PWM) | (1 << MOTOR_R_PWM);
-    DDRB |= (1 << MOTOR_L_IN1) | (1 << MOTOR_L_IN2) | (1 << LED_L) | (1 << SENSOR_ON);
-
-    PORTD &= ~(1 << BUTTON);
-    PORTB &= ~(1 << LED_L);
-    PORTB &= ~(1 << SENSOR_ON);
-
-    adc_init();
-    pwm_init();
-    timer1_ctc_init();
-    timer1_interrupt_enable();
-    timer1_start();
-    sei();
-}
 
 #endif

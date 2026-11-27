@@ -13,5 +13,6 @@ typedef enum {
 
 void pwm_init(void);
 void pwm_set_duty(pwm_channel_t channel, uint8_t percent_duty);
+void pwm_set_raw(pwm_channel_t channel, uint8_t duty);
 
 #endif

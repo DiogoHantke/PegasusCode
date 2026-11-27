@@ -19,3 +19,9 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Python Supervisor
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc

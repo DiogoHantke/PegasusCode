@@ -1,0 +1,53 @@
+PASS calibration approved: continuous advance, 0 diagnostic legs and correct final state
+PASS calibration front: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration lateral: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration front-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration lateral-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration both-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration noise: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration contrast-failure: continuous advance, 6 diagnostic legs and correct final state
+PASS calibration front-timeout: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration no-adc: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration no-front-reference: continuous advance, 0 diagnostic legs and correct final state
+PASS calibration no-lateral-reference: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration delayed-recovery: continuous advance, 6 diagnostic legs and correct final state
+PASS calibration all-lateral-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration repeat-success: continuous advance, 0 diagnostic legs and correct final state
+PASS calibration repeat-fault: continuous advance, 0 diagnostic legs and correct final state
+PASS initial-white: no false line transition, bounded movement and blinking fault LED
+PASS initial-black: no false line transition, bounded movement and blinking fault LED
+PASS initial-no-adc: no false line transition, bounded movement and blinking fault LED
+PASS initial-lateral-no-adc: no false line transition, bounded movement and blinking fault LED
+PASS calibration approved: continuous advance, 0 diagnostic legs and correct final state
+PASS calibration front: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration lateral: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration front-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration lateral-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration both-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration noise: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration contrast-failure: continuous advance, 6 diagnostic legs and correct final state
+PASS calibration front-timeout: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration no-adc: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration no-front-reference: continuous advance, 0 diagnostic legs and correct final state
+PASS calibration no-lateral-reference: continuous advance, 1 diagnostic legs and correct final state
+PASS calibration delayed-recovery: continuous advance, 6 diagnostic legs and correct final state
+PASS calibration all-lateral-recovery: continuous advance, 2 diagnostic legs and correct final state
+PASS calibration repeat-success: continuous advance, 0 diagnostic legs and correct final state
+PASS calibration repeat-fault: continuous advance, 0 diagnostic legs and correct final state
+PASS initial-white: no false line transition, bounded movement and blinking fault LED
+PASS initial-black: no false line transition, bounded movement and blinking fault LED
+PASS initial-no-adc: no false line transition, bounded movement and blinking fault LED
+PASS initial-lateral-no-adc: no false line transition, bounded movement and blinking fault LED
+PASS main short: debounced edges, state interlocks and reset
+PASS main long: debounced edges, state interlocks and reset
+PASS main bounce: debounced edges, state interlocks and reset
+PASS main wrap-short: debounced edges, state interlocks and reset
+PASS main wrap-long: debounced edges, state interlocks and reset
+PASS main retry-success: debounced edges, state interlocks and reset
+PASS main retry-fault: debounced edges, state interlocks and reset
+PASS main long-retry: debounced edges, state interlocks and reset
+PASS main busy: debounced edges, state interlocks and reset
+PASS main manual: debounced edges, state interlocks and reset
+PASS main estop: debounced edges, state interlocks and reset
+PASS main emergency: debounced edges, state interlocks and reset
+PASS main boot-held: debounced edges, state interlocks and reset

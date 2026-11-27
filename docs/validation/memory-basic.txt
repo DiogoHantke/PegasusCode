@@ -1,0 +1,9 @@
+PlatformIO atmega328p, atmelavr 5.1.0, ATmega328P 16 MHz
+Flash: 7284 / 32256 bytes (22.6%)
+SRAM static: 324 / 2048 bytes (15.8%)
+.data: 128 bytes; .bss: 196 bytes
+Buffers: RX32 + TX64 + parser48 = 144 bytes
+No snprintf/vfprintf or pid_step in the linked ELF.
+Runtime peak stack and hardware timing have not been measured.
+Previous image: Flash 10196 bytes; SRAM static 1045 bytes.
+Main state/button review: 53 host scenarios passed; 74 Python/protocol/GUI tests passed.

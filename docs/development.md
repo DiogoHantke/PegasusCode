@@ -55,6 +55,6 @@ Equivale a `sh tests/host/run.sh` e requer um compilador C disponível como `cc`
 
 São 20 cenários executados nas duas polaridades claro/escuro: aprovação direta, contraste insuficiente, recuperação frontal e lateral, recuperação tardia, ruído, ausência de referências, ADC sem progresso, timeouts e reinício da calibração após sucesso ou falha. São conferidos ordem dos movimentos, pausa de inversão, limites de tentativas, motores parados e sinalização do resultado. Os testes usam ADC assíncrono e GPIO simulados; não medem os sinais físicos da placa.
 
-Além dos 40 casos de calibração, nove cenários exercitam o `main.c`: toque curto, toque longo, repique, virada do contador, nova calibração após sucesso/falha e acionamento durante a calibração.
+Além dos 40 casos de calibração, 13 cenários exercitam o `main.c` atual: toque válido com debounce de 500 ms, toque longo, repique, virada de contador, nova calibração após retorno por FINISH/EMERGENCY, pressão durante calibração, modo manual, ESTOP, rearme com botão segurado e partida com botão pressionado ao ligar. Os stubs representam somente periféricos/eventos externos e não implementam corrida. O teste específico do LED em `supervisor/tests/test_firmware.py` valida limites, repetição e reentrada no padrão de emergência.
 
 A CI executa esses testes e compila os dois ambientes do PlatformIO. Para validar na bancada, confira os oito canais e a polaridade dos sensores, os sentidos dos motores com rodas suspensas, os tempos e a indicação do LED.

@@ -5,13 +5,13 @@ OBJCOPY = avr-objcopy
 SIZE = avr-size
 BUILD_DIR = build
 TARGET = $(BUILD_DIR)/pegasus
-SOURCES = $(wildcard src/*.c src/calibration/*.c src/communication/*.c lib/*/*.c)
+SOURCES = $(wildcard src/*.c src/calibration/*.c lib/*/*.c) src/communication/system_init.c
 OBJECTS = $(patsubst %.c,$(BUILD_DIR)/%.o,$(SOURCES))
-CPPFLAGS += -DPEGASUS_SUPERVISOR -DBT_BAUD=9600UL -DF_CPU=$(F_CPU) -Iinclude $(addprefix -I,$(wildcard lib/*))
+CPPFLAGS += -DF_CPU=$(F_CPU) -Iinclude $(addprefix -I,$(wildcard lib/*))
 CFLAGS += -mmcu=$(MCU) -std=gnu11 -Os -Wall -Wextra -ffunction-sections -fdata-sections
 LDFLAGS += -mmcu=$(MCU) -Wl,--gc-sections
 
-.PHONY: all clean size test
+.PHONY: all clean size test test-running
 all: $(TARGET).hex
 
 $(BUILD_DIR)/%.o: %.c
@@ -29,6 +29,10 @@ size: $(TARGET).elf
 
 test:
 	sh tests/host/run.sh
+	sh tests/host/run_running.sh
+
+test-running:
+	sh tests/host/run_running.sh
 
 clean:
 	rm -rf $(BUILD_DIR)
