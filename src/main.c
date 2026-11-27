@@ -6,6 +6,7 @@
 #include "pwm_lib.h"
 #include "timer_lib.h"
 #include "calibration.h"
+#include "line_follower.h"
 #include "pegasus_system.h"
 
 #ifdef PEGASUS_SUPERVISOR
@@ -79,6 +80,8 @@ int main(void){
     for(;;){
 
         timer1_start();
+
+        if(state != RUNNING)line_follower_reset();
 
 #ifdef PEGASUS_SUPERVISOR
         supervisor_step(&state);
@@ -172,7 +175,12 @@ int main(void){
             break;
 
         case RUNNING:
-            
+            if(pressed){
+                line_follower_reset();
+                state = STOP;
+            }else{
+                line_follower_step(&state);
+            }
             break;
 
         case FINISH:
@@ -220,6 +228,7 @@ int main(void){
 #ifdef PEGASUS_SUPERVISOR
         supervisor_after(&state);
 #endif
+        if(state != RUNNING)line_follower_reset();
 
     }
 }

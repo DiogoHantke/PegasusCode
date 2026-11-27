@@ -5,6 +5,7 @@
 
 void adc_init(void);
 uint8_t adc_read(uint8_t channel, uint8_t *value);
+uint8_t adc_read_10(uint8_t channel, uint16_t *value);
 
 uint8_t adc_latest(uint8_t channel);
 uint8_t adc_valid_mask(void);

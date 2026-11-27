@@ -26,7 +26,7 @@ void adc_init(void){
 
 }
 
-uint8_t adc_read(uint8_t channel, uint8_t *value){
+uint8_t adc_read_10(uint8_t channel, uint16_t *value){
 
     static uint8_t converting = 0;
     static uint8_t active_channel = 0x00;
@@ -37,12 +37,14 @@ uint8_t adc_read(uint8_t channel, uint8_t *value){
 
         if (ADCSRA & (1 << ADSC))return 0;
 
-        uint8_t result = ADCH;
+        uint8_t low = ADCL;
+        uint8_t high = ADCH;
+        uint16_t result = ((uint16_t)high << 2) | (low >> 6);
         converting = 0;
 
         if (active_channel == channel){
 
-            latest[channel] = result;
+            latest[channel] = result >> 2;
             valid |= 1U << channel;
             *value = result;
             return 1;
@@ -58,5 +60,14 @@ uint8_t adc_read(uint8_t channel, uint8_t *value){
     }
 
     return 0;
+
+}
+
+uint8_t adc_read(uint8_t channel, uint8_t *value){
+
+    uint16_t raw;
+    if(!value || !adc_read_10(channel, &raw))return 0;
+    *value = raw >> 2;
+    return 1;
 
 }

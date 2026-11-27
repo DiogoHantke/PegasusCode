@@ -35,3 +35,14 @@ void pwm_set_duty(pwm_channel_t channel, uint8_t percent_duty){
     }
 
 }
+
+/* Escala 0..255 para corrida; a interface percentual da calibracao permanece. */
+void pwm_set_raw(pwm_channel_t channel, uint8_t duty){
+
+    if(channel == PWM_A){
+        OCR0A = duty;
+    }else{
+        OCR0B = duty;
+    }
+
+}

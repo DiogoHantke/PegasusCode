@@ -11,7 +11,7 @@ CPPFLAGS += -DPEGASUS_SUPERVISOR -DBT_BAUD=9600UL -DF_CPU=$(F_CPU) -Iinclude $(a
 CFLAGS += -mmcu=$(MCU) -std=gnu11 -Os -Wall -Wextra -ffunction-sections -fdata-sections
 LDFLAGS += -mmcu=$(MCU) -Wl,--gc-sections
 
-.PHONY: all clean size test
+.PHONY: all clean size test test-running
 all: $(TARGET).hex
 
 $(BUILD_DIR)/%.o: %.c
@@ -29,6 +29,10 @@ size: $(TARGET).elf
 
 test:
 	sh tests/host/run.sh
+	sh tests/host/run_running.sh
+
+test-running:
+	sh tests/host/run_running.sh
 
 clean:
 	rm -rf $(BUILD_DIR)
