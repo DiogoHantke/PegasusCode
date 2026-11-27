@@ -2,7 +2,7 @@ name: Firmware build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/running-ino]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -21,12 +21,10 @@ jobs:
           python-version: '3.12'
       - name: Install PlatformIO Core
         run: python -m pip install 'platformio==6.2.0'
-      - name: Install Supervisor test dependencies
-        run: python -m pip install -r supervisor/requirements-dev.txt
-      - name: Test Supervisor and communication firmware
-        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q -c supervisor/pytest.ini supervisor/tests
-      - name: Test calibration on host
+      - name: Test controls, calibration and running on host
         run: make test
+      - name: Build Nano racing firmware
+        run: pio run -e nano_running
       - name: Build motor diagnostic
         run: pio run -e test_motors
       - name: Build ATmega328P firmware

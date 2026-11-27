@@ -2,60 +2,45 @@
 
 # PegasusCode
 
-Firmware em C para o robô seguidor de linha Pegasus, com ATmega328P a 16 MHz, oito sensores analógicos e driver de motores TB6612FNG. Usa acesso direto aos registradores, sem framework Arduino.
+Seguidor de linha para Nano ATmega328P, em C puro, sem framework Arduino.
+Calibracao, botao D2, buzzer, controle PD e diagnostico USB funcionam por
+etapas curtas e interrupcoes, sem delays ou lacos de espera por hardware.
 
-A implementação faz calibração frontal e lateral, diagnóstico e até três ciclos de recalibração dos sensores reprovados. O [Pegasus Supervisor](supervisor/README.md) acrescenta interface Python/Tkinter fiel ao HTML de referência, comunicação Bluetooth bidirecional, comunicação básica para sensores/calibração, parâmetros PID em RAM e ensaio manual WASD. Após calibrar, o robô permanece parado até um comando explícito. O firmware de corrida, a aplicação dos ganhos PID ao controle e a detecção física de voltas estão pendentes de desenvolvimento pelo usuário.
+## Operacao
 
-## Supervisório desktop
+Ao ligar, um bip confirma a inicializacao e os motores ficam parados.
+O primeiro toque curto calibra; depois de calibrar, outro toque curto inicia.
+Segurar por dois segundos recalibra. Durante calibracao ou corrida, apertar
+para os motores; soltar nao reinicia. O botao mantem o D2 da montagem.
 
-```sh
-cd supervisor
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-./run.sh --simulate
-```
+A calibracao automatica dura cerca de 5,2 segundos e aproveita os frontais
+validos mesmo com outros canais falhos. O PID usa Kp=1.2, Kd=4.3 e a formula
+de `Main (1).ino`. A corrida usa leitura direta e PWM maximo 80/255.
 
-Para hardware real, execute `./run.sh`, selecione porta/baud e aguarde a identificação do firmware. Veja [instalação, Bluetooth e operação](supervisor/README.md), [protocolo](docs/supervisor-protocol.md), [integração](docs/supervisor-integration.md) e [validação](docs/validation/README.md). O padrão embarcado é 9600 baud, configurável em `platformio.ini`; o módulo Bluetooth precisa ter a mesma configuração.
-
-## Operação
-
-Ao ligar, os motores ficam parados. Pressione e solte o botão D2 antes de dois segundos para iniciar a calibração. Segurar por dois segundos leva a `WAITING`, sem calibrar. O botão é ativo alto, com pull-down externo.
-
-O LED permanece aceso durante a calibração, apaga no sucesso e, em EMERGENCY, faz duas piscadas de 250 ms a cada ciclo de 2 segundos. O debounce exige 500 ms de estabilidade em cada borda; toques menores podem ser ignorados. WAITING exige uma nova pressão para entrar em RUNNING, cuja rotina ainda está vazia. Em FINISH, STOP ou EMERGENCY, uma nova pressão retorna a INIT; uma pressão posterior inicia nova calibração. ESTOP travado exige REARM pelo supervisório e não pode ser liberado pelo botão.
-
-Os limites dos sensores ficam somente na RAM. Desligar ou reiniciar exige nova calibração; não há salvamento ou restauração em EEPROM.
-
-## Estrutura
-
-| Caminho | Conteúdo |
-| --- | --- |
-| `src/main.c` | Inicialização de GPIO, ADC, PWM e Timer1 e máquina de estados principal |
-| `src/calibration/calibration.c` | Coordenação dos estados da calibração e indicação de falha |
-| `src/calibration/calibration_initial.c` | Preparação e aquisição frontal/lateral inicial |
-| `src/calibration/calibration_diagnostic.c` | Diagnóstico, recalibração seletiva e conclusão |
-| `src/calibration/calibration_filter.c` | Médias, filtro, extremos e aprovação dos sensores |
-| `src/calibration/calibration_detection.c` | Detecção de branco/preto e leitura durante a recalibração |
-| `src/diagnostics/motors.c` | Firmware separado para ensaio de motores e sensores |
-| `include/` | Pinos, parâmetros e interfaces públicas |
-| `lib/adc`, `lib/pwm`, `lib/timer` | Drivers utilizados pelo firmware |
-| `tests/host/` | Testes de calibração com periféricos simulados |
-| `docs/` | Hardware, calibração e desenvolvimento |
-
-## Compilar e testar
+## Compilar, testar e gravar
 
 ```sh
-pio run -e atmega328p
-sh tests/host/run.sh
+make test
+pio run -e nano_running
+pio run -e nano_running -t upload --upload-port /dev/ttyUSB0
+pio device monitor --port /dev/ttyUSB0 --baud 115200
 ```
 
-Também é possível compilar com AVR GCC: `make` e `make size`.
+O bootloader grava a 57600 baud. O monitor e somente TX e mostra botao,
+estados e sensores a 115200 baud. Bluetooth nao participa do firmware.
+Os testes de hardware devem confirmar leituras, sentidos e resposta na pista.
 
-O ensaio separado compila com `pio run -e test_motors` e inicia movimento ao ligar, com PWM de 30%. Faça esse ensaio com as rodas suspensas.
+## Fontes principais
 
-## Documentação
+- `src/app.c`: maquina de estados e sinalizacao.
+- `src/button.c`: debounce, toque curto e pressao longa.
+- `src/buzzer.c`: tom de 1 kHz por Timer2.
+- `src/calibration/`: varredura automatica e filtro.
+- `src/line_follower.c`: posicao, PD, marcas e parada.
+- `src/status_monitor.c`: diagnostico USB sem bloquear.
 
-- [Hardware e pinos](docs/hardware.md)
-- [Sequência e filtro de calibração](docs/calibration.md)
-- [Compilação, gravação e testes](docs/development.md)
+[Calibracao](docs/calibration.md) · [Corrida e operacao](docs/running.md) ·
+[Pinos e hardware](docs/hardware.md)
 
-O perfil PlatformIO usa `board = uno`. A montagem documentada utiliza Nano com ADC6/ADC7; o bootloader instalado determina a configuração correta de gravação.
+As branches `main` e `calibracao-v3` preservam as versoes anteriores. O
+trabalho atual esta em `feature/running-ino`.

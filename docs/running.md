@@ -1,44 +1,69 @@
-# Corrida em C
+# Corrida em C nao bloqueante
 
-A branch `feature/running-ino` parte de `calibracao-v3` (`bfbc913`). Os arquivos
-`src/calibration/` e os gestos do botao foram preservados. No fluxo original,
-um toque no estado inicial calibra, segurar por dois segundos pula para espera,
-e outro toque em espera inicia. Pular a calibracao nao fornece extremos validos:
-a corrida entra em emergencia se os sensores nao estiverem calibrados.
+A branch de desenvolvimento e `feature/running-ino`. As branches `main` e
+`calibracao-v3` preservam as versoes anteriores.
 
-O perfil padrao `nano_running` compila para Nano ATmega328P, usa bootloader a
-57600 baud e nao habilita o supervisor/Bluetooth. O perfil anterior `atmega328p`
-continua disponivel. Nao existe monitor serial no perfil autonomo.
+## Botao D2 e estados
 
-`line_follower.c` usa `Main (1).ino` como referencia: leitura direta de A6 a A1,
-normalizacao 0..100 pelos extremos calibrados, pesos -2.5 a +2.5 e PD com
-Kp=1.2 e Kd=4.3. A polaridade vem de `CAL_WHITE_HIGH` da calibracao original;
-o ADC do sketch associa preto a valores menores, enquanto o padrao original
-do projeto associa preto a valores maiores. A biblioteca mantem a interface
-de oito bits da calibracao e acrescenta leitura de dez bits para corrida.
+O botao continua ativo alto com o pull-down externo da montagem. O debounce
+e de 25 ms, com eventos distintos de pressionar, toque curto e pressao longa.
+Ao ligar, os motores ficam parados e o buzzer emite um bip.
 
-PWM maximo e velocidade de reta: 80/255. Curvas: 46/255. Os comandos usam
-base menos correcao na esquerda e base mais correcao na direita. A esquerda
-avanca com IN2 alto e a direita com IN1 alto, como a calibracao da montagem.
-O PWM percentual da calibracao permanece inalterado.
+- Primeiro toque de menos de um segundo: inicia a calibracao automaticamente.
+- Segurar por dois segundos em qualquer estado: inicia nova calibracao.
+- Depois de calibrar, toque de menos de um segundo: inicia a corrida.
+- Durante corrida ou calibracao, uma pressao para imediatamente apos debounce.
+  Soltar esse mesmo toque nao reinicia os motores.
+- Apos STOP, FINISH ou emergencia por perda de linha, um novo toque reinicia
+  a corrida com a calibracao disponivel. Sem calibracao valida, tenta calibrar.
+- Pressionar entre um e dois segundos nao inicia uma corrida.
+- Se ligar com o botao preso, e necessario soltar e pressionar novamente.
 
-Uma varredura e consumida a cada 5 ms. A7 >= 30 com A0 <= 30 alterna reta e
-curva depois de 120 ms estaveis. Cruzamentos com cinco sensores ativos inibem
-marcas. A chegada exige nove segundos desde a partida, saida da marca inicial
-e nova marca A0 <= 30 por 120 ms. Estas protecoes corrigem os bloqueios do
-sketch: a corrida nao termina apenas por decorrerem nove segundos.
+O LED pisca durante calibracao, fica aceso quando pronto e durante corrida,
+e pisca em emergencia. Dois bips indicam todos os frontais calibrados; tres
+indicam calibracao parcial ou emergencia. Nao ha esperas pelo buzzer.
 
-Sem linha frontal, o PWM zera imediatamente; apos 150 ms continua sem linha,
-o estado passa a emergencia. ADC sem resposta por 100 ms ou calibracao
-invalida tambem causam emergencia. Apertar o botao durante a corrida para os
-motores e muda para STOP. A recuperacao usa o fluxo original de estados.
+## Leitura e PID
 
-Validacao: `make test-running` cobre os dois sentidos de leitura, comparacao
-com mil quadros das expressoes do sketch por polaridade, perda/retorno de linha,
-timeout, curvas, cruzamentos, chegada, reinicio e volta do contador de tempo.
-`pio run -e nano_running` compila o firmware. A validacao fisica na pista e
-a gravacao desta branch devem ser feitas separadamente.
+A leitura de corrida e direta, sem media ou filtro temporal. A calibracao
+mantem o filtro de medias de dez amostras, threshold 100 e confirmacao 10.
+O ADC oferece dez bits na corrida e oito bits na calibracao.
 
-A suite antiga `make test` ja falha na base `bfbc913`, em uma assercao de
-sinalizacao de emergencia no teste de calibracao. Essa falha foi preservada;
-os novos testes de corrida usam `make test-running` e passam separadamente.
+O calculo segue `Main (1).ino`: A6..A1, normalizacao em 0..100, pesos -2.5 a
++2.5 e PD `erro * 1.2 + (erro - erro_anterior) * 4.3`. O limite de correcao
+e 250 em reta e 110 em curva. Os comandos sao base menos correcao na
+esquerda e base mais correcao na direita, com PWM maximo 80/255. A base e 80
+em reta e 46 em curva. O controle atualiza a cada 5 ms.
+
+`CAL_WHITE_HIGH=1` segue o map do sketch: ADC menor corresponde a preto.
+Pode ser invertido para sensores de polaridade oposta. O motor esquerdo
+avanca com IN2 alto e o direito com IN1 alto, conforme a montagem espelhada.
+
+Canais sem contraste valido sao ignorados. O limiar de presenca de linha e
+proporcional ao numero de frontais aproveitados; um canal falho nao cancela
+os demais. Sem qualquer frontal utilizavel, nao existe posicao para o PID.
+Sem linha detectada, o PWM zera no primeiro quadro; apos 150 ms o estado
+e EMERGENCY. Falta de resposta do ADC por 100 ms tambem para os motores.
+
+As marcas seguem A7 >= 30 e A0 <= 30, com 120 ms de confirmacao. A chegada
+requer nove segundos desde a partida, saida da marca inicial e nova marca
+A0 <= 30 por 120 ms. Cruzamentos com cinco frontais ativos inibem marcas.
+Um lateral sem calibracao desabilita a funcao correspondente sem impedir
+corrida; com A0 falho, a parada final deve ser feita pelo botao.
+
+## Compilacao e diagnostico
+
+`make test` cobre botao, buzzer, UART, calibracao real integrada com a
+maquina de estados, falhas parciais/totais, nova tentativa, perda de linha,
+parada, passagem do contador de tempo e 2.000 quadros comparados ao sketch.
+`pio run -e nano_running` compila para o Nano ATmega328P.
+
+Gravacao: `pio run -e nano_running -t upload --upload-port /dev/ttyUSB0`.
+O bootloader usa 57600 baud; o monitor USB usa 115200 baud.
+O monitor transmite estado, botao, mascara de frontais validos e ultimas
+leituras ADC (quantizadas em passos de quatro). As leituras sao atualizadas
+na calibracao e na corrida; em espera permanecem as ultimas amostras.
+A UART envia por interrupcao, sem Bluetooth nem comandos de controle.
+
+Timer0 produz PWM, Timer1 fornece o relogio sempre ativo e Timer2 gera o
+buzzer de 1 kHz. Nenhum estado desliga o relogio ou espera um botao/sensor.

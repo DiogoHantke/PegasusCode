@@ -16,6 +16,7 @@ static const uint8_t sensor_order[SENSORS_QUANTITY] = {
 static uint8_t initialized;
 static uint8_t index_sensor;
 static uint8_t samples[SENSORS_QUANTITY];
+static uint8_t valid_mask;
 static uint16_t side_value, stop_value;
 static uint8_t loss_pending, curve, side_last, marker_candidate, marker_pending;
 static uint8_t finish_armed, finish_enabled;
@@ -158,6 +159,8 @@ static int16_t pid_line(int16_t position, float kp, float kd, int16_t limit){
 
 static void curve_line(uint16_t now, uint8_t crossing){
 
+    if((valid_mask & 0x81U) != 0x81U)return;
+
     /* Mesma condicao bruta de Curve_line: A7 >= 30 e A0 <= 30. */
     uint8_t side = !crossing && side_value >= LINE_MARKER_RAW_THRESHOLD &&
                    stop_value <= LINE_MARKER_RAW_THRESHOLD;
@@ -179,6 +182,8 @@ static void curve_line(uint16_t now, uint8_t crossing){
 }
 
 static uint8_t finish_line(uint16_t now, uint8_t crossing){
+
+    if(!(valid_mask & (1U << QTR00_L)))return 0;
 
     if((uint16_t)(now - started) >= LINE_FINISH_DELAY_MS)finish_enabled = 1;
 
@@ -220,6 +225,7 @@ void line_follower_step(STATE *state){
         initialized = 1;
         index_sensor = curve = side_last = marker_candidate = marker_pending = 0;
         finish_armed = finish_enabled = loss_pending = 0;
+        valid_mask = 0;
         last_error = last_position = 0;
         started = frame_started = marker_changed = now;
         last_frame = now - LINE_PERIOD_MS;
@@ -240,11 +246,10 @@ void line_follower_step(STATE *state){
 
     if(!adc_read_10(channel, &raw))return;
 
-    if(!normalize_sensor(channel, raw, &samples[channel])){
-
-        line_fault(state);
-        return;
-
+    if(normalize_sensor(channel, raw, &samples[channel]))valid_mask |= 1U << channel;
+    else{
+        valid_mask &= ~(1U << channel);
+        samples[channel] = 0;
     }
 
     if(channel == QTR07_L)side_value = raw;
@@ -256,10 +261,12 @@ void line_follower_step(STATE *state){
 
     uint16_t sum = 0;
     int16_t weighted = 0;
-    uint8_t active = 0;
+    uint8_t active = 0, available = 0;
 
     for(uint8_t index = 0; index < 6; index++){
 
+        if(!(valid_mask & (1U << (QTR06_F - index))))continue;
+        available++;
         uint8_t sensor = samples[QTR06_F - index];
         sum += sensor;
         weighted += (int16_t)(2 * (int16_t)index - 5) * sensor;
@@ -267,7 +274,12 @@ void line_follower_step(STATE *state){
 
     }
 
-    uint8_t online = sum > LINE_PRESENT_SUM;
+    if(!available){
+        line_fault(state);
+        return;
+    }
+    /* Mantem sum > 100 com seis sensores; ajusta a exigencia aos restantes. */
+    uint8_t online = sum * 6U > LINE_PRESENT_SUM * available;
     uint8_t crossing = active >= 5U;
     int16_t position = get_position(sum, weighted, online);
 

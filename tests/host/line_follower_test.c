@@ -8,7 +8,7 @@
 uint8_t DDRD, DDRB, PORTD, PORTB, PIND;
 static uint16_t now;
 static uint16_t values[8];
-static uint8_t left, right, pending, adc_stalled, calibration_bad;
+static uint8_t left, right, pending, adc_stalled, calibration_bad, failed_mask;
 static STATE state;
 
 uint16_t timer1_elapsed_milliseconds(void){ return now; }
@@ -22,10 +22,9 @@ void pwm_set_duty(pwm_channel_t channel, uint8_t percent){
     pwm_set_raw(channel, 0);
 }
 void calibration_get(uint8_t channel, uint8_t *low, uint8_t *high, uint8_t *ok){
-    (void)channel;
     *low = 20;
     *high = calibration_bad ? 20 : 220;
-    *ok = !calibration_bad;
+    *ok = !calibration_bad && !(failed_mask & (1U << channel));
 }
 uint8_t adc_read_10(uint8_t channel, uint16_t *value){
     if(adc_stalled)return 0;
@@ -62,7 +61,7 @@ static void center(void){
 static void begin(uint16_t time){
     line_follower_reset();
     now = time;
-    pending = adc_stalled = calibration_bad = 0;
+    pending = adc_stalled = calibration_bad = failed_mask = 0;
     state = RUNNING;
     center();
 }
@@ -214,5 +213,16 @@ int main(void){
     line_follower_reset();
     assert(left == 0 && right == 0);
     setup(0);
-    puts("line follower: OK");
+    /* Falhas laterais e parciais nao impedem corrida nem criam falsas marcas. */
+    setup(0);
+    failed_mask = 0x81U;
+    values[0] = 0;
+    values[7] = 1023;
+    wait_ms(10000);
+    assert(state == RUNNING && left == 80 && right == 80);
+    setup(0);
+    failed_mask = 0x7EU & ~(1U << 3);
+    wait_ms(1000);
+    assert(state == RUNNING && (left || right));
+    puts("line follower: OK (including partial sensor failure)");
 }

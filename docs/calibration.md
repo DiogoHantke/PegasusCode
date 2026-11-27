@@ -1,62 +1,27 @@
-# Calibração automática dos sensores
+# Calibracao automatica
 
-[Início](../README.md) · [Compilação e testes](development.md)
+A rotina em `src/calibration/calibration.c` tem quatro etapas: avanco de
+2.500 ms, parada de 200 ms, recuo de 2.500 ms e conclusao. Os dois motores
+usam 51/255, com o sentido de avanco da montagem. O botao pode cancelar
+a qualquer momento. Nao ha espera bloqueante nem exigencia de cruzar um
+limiar absoluto de branco/preto para sair de uma etapa.
 
-A implementação fica em `src/calibration/`, separada em coordenação (`calibration.c`), aquisição inicial (`calibration_initial.c`), diagnóstico (`calibration_diagnostic.c`), filtro (`calibration_filter.c`) e detecção (`calibration_detection.c`). Os dados e subestados são compartilhados somente entre esses módulos pelo header privado `calibration_internal.h`. A máquina de estados em `src/main.c` chama `calibration_sensor(&state)` em `CALIBRATION` e chama `led_emergency_update()` em `EMERGENCY` para atualizar o LED de defeito.
+Os oito canais sao varridos continuamente durante toda a calibracao. O
+filtro original em `calibration_filter.c` calcula medias de dez amostras,
+aceita variacoes menores que `THRESHOLD_LINE=100` e pede confirmacao de
+variacoes maiores com tolerancia 10. Os extremos aceitos ficam em RAM.
 
-## Sequência implementada
+Um canal e aproveitado quando apresenta contraste de pelo menos 20 na
+escala de oito bits (aproximadamente 80 na escala 0..1023). Os limites sao
+individuais. Canais constantes ou sem amostras ficam reprovados.
 
-O `main.c` reconhece um toque curto no botão ativo alto: pressionar e soltar antes de dois segundos, com debounce de 500 ms. Segurar por dois segundos leva a `WAITING`, sem iniciar a calibração. Com acionamento, a calibração reinicia os oito sensores com mínimo 255, máximo zero e filtro zerado, liga emissores e LED L e solicita 20% de PWM nos dois motores.
+Se ao menos um frontal tem contraste, a maquina vai para WAITING; laterais
+ou outros frontais reprovados nao impedem a partida. Sem frontal utilizavel,
+vai para EMERGENCY, com motores e emissores desligados. Um novo toque permite
+outra tentativa; nao existe travamento permanente. A rotina nao grava EEPROM.
 
-1. **Frontal:** avança em linha reta e executa o filtro para QTR01–QTR06 ainda não aprovados. Passa aos laterais quando todos os frontais estão aprovados ou quando um frontal confirma a passagem de branco para preto. Os aprovados continuam disponíveis para leitura, preservando os extremos.
-2. **Lateral:** continua o mesmo avanço, sem parar ou inverter na troca de grupo. Executa o filtro para QTR00 e QTR07 ainda não aprovados. Para e entra no diagnóstico quando ambos estão aprovados ou quando um lateral confirma branco seguido de preto.
-3. **Diagnóstico:** conserva os aprovados em RAM e reinicia somente os canais reprovados. Sem pendências, passa direto à conclusão.
-4. **Recalibração lateral:** começa de ré e atualiza somente os laterais pendentes. Para quando qualquer frontal aprovado confirma branco. Precisa de pelo menos um frontal válido para iniciar esse movimento.
-5. **Recalibração frontal:** depois da pausa de inversão, avança atualizando somente os frontais pendentes. Para quando qualquer lateral aprovado confirma branco. A aprovação dos laterais é reavaliada ao terminar o recuo, permitindo usar um lateral recém-recuperado como referência.
-6. **Conclusão:** reavalia os frontais ao terminar o avanço. Se todos passaram, conclui. Caso ainda haja pendências, repete ré e avanço até o limite de três ciclos completos. Canais aprovados ao final do respectivo trecho saem da máscara de recalibração.
+A pista deve passar por branco e preto durante a varredura automatica para
+que os sensores obtenham extremos diferentes. A calibracao termina em cerca
+de 5,2 segundos mesmo se um canal falhar; os canais restantes sao utilizados.
 
-```mermaid
-flowchart TD
-    I[Preparar sensores e acender LED L] --> F[Avançar e calibrar frontais]
-    F -->|Todos aprovados ou branco para preto| L[Continuar avanço e calibrar laterais]
-    L -->|Ambos aprovados ou branco para preto| D[Parar e verificar aprovados]
-    D -->|Sem pendências| S[Conclusão]
-    D -->|Pendências e frontal válido| R[Recuar e recalibrar laterais pendentes]
-    R -->|Frontal válido detecta branco| A[Avançar e recalibrar frontais pendentes]
-    A -->|Lateral válido detecta branco| C{Todos aprovados ou três ciclos?}
-    C -->|Não| R
-    C -->|Sim| S
-    S -->|Todos aprovados| W[Apagar LED L e WAITING]
-    S -->|Falha| E[Parar e piscar LED L em EMERGENCY]
-```
-
-## Detecção de linha e limites
-
-Na calibração inicial ainda não existem extremos válidos para todos os sensores. A passagem de branco para preto usa `CAL_LINE_THRESHOLD=128` no ADC de oito bits, ajustável em `include/pegasus_config.h`. Com `CAL_WHITE_HIGH=0`, branco significa ADC abaixo do limiar; com 1, significa acima. Cada canal precisa confirmar dez amostras consecutivas de branco antes de vinte consecutivas de preto. As duas janelas de preto dão ao filtro a oportunidade de confirmar o novo extremo. A troca de grupo ocorre ao terminar a varredura corrente, sem misturar amostras de canais.
-
-No diagnóstico, a identificação de branco usa o ponto médio do mínimo e máximo da referência aprovada e exige dez amostras consecutivas no mesmo canal. Leituras isoladas de branco não provocam inversão. A referência vem sempre do grupo oposto ao que está sendo recalibrado.
-
-Cada trecho possui timeout nominal definido por `CAL_TIMEOUT_SECONDS` (atualmente três segundos), com resolução de segundos. Timeout ou ausência de referência válida provoca PWM zero e falha, sem movimento indefinido. Antes das inversões no diagnóstico, o PWM permanece zero por `MOTOR_REVERSE_DELAY_SECONDS=2` segundos nominais. O primeiro diagnóstico é de ré; a calibração inicial inteira é para frente.
-
-## LED e dados em RAM
-
-O LED L permanece aceso durante a calibração. Só apaga quando todos os sensores estiverem aprovados; a calibração para o Timer1 e o estado global passa para `WAITING`. O laço principal mantém o timer ativo para acompanhar o botão e a sinalização, independentemente do Bluetooth. Em falha, os motores param, os emissores desligam e o LED acende entre 250–500 ms e 750–1000 ms de cada ciclo de 2000 ms. A sinalização é cooperativa, sem espera; o ciclo reinicia a cada entrada em EMERGENCY e trata a virada do contador de 16 bits. O Timer1 continua ativo para produzir essa indicação em `EMERGENCY`.
-
-Os limites ficam somente na RAM e são perdidos ao desligar ou reiniciar. Não há leitura nem escrita em EEPROM. Em WAITING ou EMERGENCY, solte o botão e faça um novo toque curto para iniciar uma nova calibração. Não há início automático de corrida.
-
-## Filtro por canal
-
-Dez amostras formam uma média inteira. A primeira média apenas inicializa o candidato. Nas seguintes, calcula-se a diferença absoluta para o candidato anterior:
-
-| Condição | Ação |
-| --- | --- |
-| Sem transição pendente e diferença <50 | Aceitar o candidato anterior nos extremos |
-| Sem transição pendente e diferença ≥50 | Marcar transição pendente |
-| Com transição pendente e diferença <10 | Aceitar o candidato anterior e limpar pendência |
-| Com transição pendente e diferença ≥10 | Manter pendência |
-
-Ao final, o candidato é substituído pela média nova, mesmo quando a transição continua pendente. Assim, a confirmação compara janelas consecutivas, e não uma referência fixa. Igualdade a 50 inicia transição; igualdade a 10 não confirma. Deriva lenta pode deslocar os extremos. O filtro precisa de ensaios para caracterizar rejeição de pulsos e latência; não deve ser reutilizado automaticamente no controle periódico de corrida.
-
-## Validação
-
-`sh tests/host/run.sh` executa os cenários com ADC assíncrono simulado: avanço inicial contínuo, passagem branco/preto sem contraste suficiente, ordem ré/avanço, recuperação em um ou três ciclos, preservação dos aprovados, ruído, ausência de referência, timeout, ADC sem progresso, polaridade invertida e LED de sucesso/falha.
+Veja os [comandos do botao, PID e diagnostico USB](running.md).

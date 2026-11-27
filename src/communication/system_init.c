@@ -6,6 +6,8 @@
 #include "pwm_lib.h"
 #include "timer_lib.h"
 #include "pegasus_system.h"
+#include "buzzer.h"
+#include "status_monitor.h"
 
 #ifdef PEGASUS_SUPERVISOR
 #include "supervisor.h"
@@ -24,6 +26,8 @@ void init_sys(void){
     timer1_ctc_init();
     timer1_interrupt_enable();
     timer1_start();
+    buzzer_init();
+    status_monitor_init();
 
 #ifdef PEGASUS_SUPERVISOR
     supervisor_init();
