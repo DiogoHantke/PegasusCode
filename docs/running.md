@@ -41,13 +41,15 @@ avanca com IN2 alto e o direito com IN1 alto, conforme a montagem espelhada.
 Canais sem contraste valido sao ignorados. O limiar de presenca de linha e
 proporcional ao numero de frontais aproveitados; um canal falho nao cancela
 os demais. Sem qualquer frontal utilizavel, nao existe posicao para o PID.
-Sem linha detectada, o PWM zera no primeiro quadro; apos 150 ms o estado
-e EMERGENCY. Falta de resposta do ADC por 100 ms tambem para os motores.
+Sem linha detectada, o PWM zera no primeiro quadro. Quando os seis frontais
+leem branco logo apos um cruzamento, o ultimo comando se mantem enquanto
+a leitura continuar toda branca, por ate 150 ms. Uma perda de linha de
+150 ms leva a EMERGENCY. Falta de resposta do ADC por 100 ms tambem para os motores.
 
 As marcas seguem A7 >= 30 e A0 <= 30, com 120 ms de confirmacao. A chegada
 requer nove segundos desde a partida, saida da marca inicial e nova marca
-A0 <= 30 por 120 ms. O cruzamento com cinco ou mais frontais ativos inibe
-marcas enquanto e visto. A chegada em A0 permanece bloqueada por dois
+A0 <= 30 por 120 ms. Quatro ou mais dos seis frontais ativos caracterizam
+um cruzamento, que inibe marcas enquanto e visto. A chegada em A0 permanece bloqueada por dois
 segundos apos a ultima leitura de cruzamento ou de branco nos seis
 frontais. A confirmacao de 120 ms da chegada comeca apos esse bloqueio.
 Um lateral sem calibracao desabilita a funcao correspondente sem impedir

@@ -164,10 +164,11 @@ int main(void){
     wait_ms(9500);
     assert(state == RUNNING && left == 80 && right == 80);
 
-    /* A0 continua bloqueado apos sair do cruzamento, inclusive na virada do timer. */
+    /* Quatro frontais bloqueiam A0 no cruzamento e apos sair, mesmo na virada do timer. */
     setup(55000U);
     wait_ms(LINE_FINISH_DELAY_MS);
-    for(uint8_t c = 1; c <= 6; c++)black(c, 100);
+    black(2, 100);
+    black(5, 100);
     values[QTR00_L] = 30;
     wait_ms(1000);
     assert(state == RUNNING);
@@ -180,6 +181,28 @@ int main(void){
     values[QTR00_L] = 30;
     wait_ms(LINE_MARKER_DEBOUNCE_MS + LINE_PERIOD_MS);
     assert(state == FINISH && left == 0 && right == 0);
+
+    /* O branco logo apos um cruzamento breve nao corta o PWM. */
+    setup(0);
+    black(2, 100);
+    black(5, 100);
+    wait_ms(LINE_PERIOD_MS);
+    for(uint8_t c = 1; c <= 6; c++)black(c, 0);
+    wait_ms(20);
+    assert(state == RUNNING && left == 80 && right == 80);
+    center();
+    wait_ms(LINE_PERIOD_MS);
+    assert(state == RUNNING && left == 80 && right == 80);
+
+    /* Uma perda persistente apos o cruzamento ainda leva a emergencia. */
+    black(2, 100);
+    black(5, 100);
+    wait_ms(LINE_PERIOD_MS);
+    for(uint8_t c = 1; c <= 6; c++)black(c, 0);
+    wait_ms(LINE_LOST_TIMEOUT_MS - 1U);
+    assert(state == RUNNING && left == 80 && right == 80);
+    wait_ms(2);
+    assert(state == EMERGENCY && left == 0 && right == 0);
 
     /* Seis frontais no branco bloqueiam A0 mesmo apos a linha reaparecer. */
     setup(0);
@@ -194,8 +217,9 @@ int main(void){
     wait_ms(LINE_MARKER_DEBOUNCE_MS + LINE_PERIOD_MS);
     assert(state == FINISH && left == 0 && right == 0);
 
-    /* Chegada apos 9s precisa confirmar branco por 120ms. */
+    /* Tres frontais ativos ficam abaixo da maioria e permitem a chegada. */
     setup(0);
+    black(2, 100);
     values[QTR00_L] = 30;
     wait_ms(200);
     assert(state == RUNNING);

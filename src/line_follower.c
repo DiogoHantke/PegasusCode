@@ -18,7 +18,7 @@ static uint8_t index_sensor;
 static uint8_t samples[SENSORS_QUANTITY];
 static uint8_t valid_mask;
 static uint16_t side_value, stop_value;
-static uint8_t loss_pending, curve, side_last, marker_candidate, marker_pending;
+static uint8_t loss_pending, previous_crossing, curve, side_last, marker_candidate, marker_pending;
 static uint8_t finish_armed, finish_enabled, finish_inhibited;
 static int16_t last_error, last_position;
 static uint16_t started, last_frame, frame_started, loss_started;
@@ -225,6 +225,7 @@ void line_follower_step(STATE *state){
         initialized = 1;
         index_sensor = curve = side_last = marker_candidate = marker_pending = 0;
         finish_armed = finish_enabled = finish_inhibited = loss_pending = 0;
+        previous_crossing = 0;
         valid_mask = 0;
         last_error = last_position = 0;
         started = frame_started = marker_changed = now;
@@ -281,7 +282,7 @@ void line_follower_step(STATE *state){
     }
     /* Mantem sum > 100 com seis sensores; ajusta a exigencia aos restantes. */
     uint8_t online = sum * 6U > LINE_PRESENT_SUM * available;
-    uint8_t crossing = active >= 5U;
+    uint8_t crossing = active >= 4U;
     if(crossing || white == 6U){
         finish_inhibited = 1;
         finish_inhibited_since = now;
@@ -301,7 +302,11 @@ void line_follower_step(STATE *state){
 
     if(loss_pending){
 
-        stop_motors();
+        /* Mantem o ultimo PWM por ate LINE_LOST_TIMEOUT_MS no branco apos um cruzamento. */
+        if(!online && (white != 6U || !previous_crossing)){
+            stop_motors();
+            previous_crossing = 0;
+        }
         marker_pending = marker_candidate = side_last = 0;
         marker_changed = now;
 
@@ -312,6 +317,7 @@ void line_follower_step(STATE *state){
 
     }
 
+    previous_crossing = crossing;
     if((uint16_t)(now - last_frame) < LINE_PERIOD_MS)return;
 
     last_frame = now;
