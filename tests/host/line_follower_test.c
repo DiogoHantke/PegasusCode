@@ -56,7 +56,7 @@ static void center(void){
     white(3, 100);
     white(4, 100);
     values[QTR00_L] = 1023;
-    values[QTR07_L] = 0;
+    values[QTR07_L] = 1023;
 }
 static void begin(uint16_t time){
     line_follower_reset();
@@ -121,9 +121,9 @@ int main(void){
     wait_ms(40);
     assert(state == RUNNING && left == 80 && right == 80);
 
-    /* Marcas laterais nao escondem perda frontal; emergencia nao rearma sozinha. */
+    /* A0 nao substitui a linha frontal nem marca chegada. */
     for(uint8_t c = 1; c <= 6; c++)white(c, 0);
-    values[QTR07_L] = 30;
+    values[QTR00_L] = 30;
     tick();
     wait_ms(LINE_LOST_TIMEOUT_MS - 1);
     assert(state == RUNNING && left == 0 && right == 0);
@@ -147,19 +147,19 @@ int main(void){
     wait_ms(LINE_LOST_TIMEOUT_MS + 1);
     assert(state == EMERGENCY && left == 0 && right == 0);
 
-    /* Flanco lateral direto e estavel alterna 80/46 uma unica vez. */
+    /* Uma marca em A0 alterna 80/46 sem encerrar a corrida. */
     setup(0);
     values[QTR00_L] = 30;
-    values[QTR07_L] = 30;
+    values[QTR07_L] = 31;
     wait_ms(LINE_MARKER_DEBOUNCE_MS - 1);
     assert(left == 80 && right == 80);
     wait_ms(60);
     assert(left == 46 && right == 46);
     wait_ms(200);
     assert(left == 46);
-    values[QTR07_L] = 29;
+    values[QTR00_L] = 31;
     wait_ms(180);
-    values[QTR07_L] = 30;
+    values[QTR00_L] = 30;
     wait_ms(180);
     assert(left == 80);
 
@@ -171,54 +171,44 @@ int main(void){
     wait_ms(9500);
     assert(state == RUNNING && left == 80 && right == 80);
 
-    /* A0 continua bloqueado apos sair do cruzamento, inclusive na virada do timer. */
-    setup(55000U);
-    wait_ms(LINE_FINISH_DELAY_MS);
-    for(uint8_t c = 1; c <= 6; c++)white(c, 100);
-    values[QTR00_L] = 30;
+    /* Quatro frontais bloqueiam A7, inclusive na virada do timer. */
+    setup(64500U);
+    white(2, 100);
+    white(5, 100);
+    values[QTR07_L] = 30;
     wait_ms(1000);
     assert(state == RUNNING);
     center();
-    values[QTR00_L] = 30;
-    wait_ms(LINE_FINISH_CROSSING_HOLD_MS - 1U);
+    values[QTR07_L] = 30;
+    wait_ms(LINE_FINISH_CROSSING_HOLD_MS + LINE_MARKER_DEBOUNCE_MS);
     assert(state == RUNNING && left == 80 && right == 80);
-    values[QTR00_L] = 31;
+    values[QTR07_L] = 31;
     wait_ms(10);
-    values[QTR00_L] = 30;
-    wait_ms(LINE_MARKER_DEBOUNCE_MS + LINE_PERIOD_MS);
+    values[QTR07_L] = 30;
+    wait_ms(LINE_MARKER_DEBOUNCE_MS + 1U);
     assert(state == FINISH && left == 0 && right == 0);
 
-    /* Seis frontais no fundo escuro bloqueiam A0 mesmo apos a linha reaparecer. */
+    /* Fundo escuro em toda a frente nao bloqueia a marca de A7. */
     setup(0);
-    wait_ms(LINE_FINISH_DELAY_MS);
     for(uint8_t c = 1; c <= 6; c++)white(c, 0);
-    values[QTR00_L] = 30;
-    wait_ms(20);
-    center();
-    values[QTR00_L] = 30;
-    wait_ms(LINE_FINISH_CROSSING_HOLD_MS - 1U);
-    assert(state == RUNNING && left == 80 && right == 80);
-    wait_ms(LINE_MARKER_DEBOUNCE_MS + LINE_PERIOD_MS);
+    values[QTR07_L] = 30;
+    wait_ms(LINE_MARKER_DEBOUNCE_MS + 1U);
     assert(state == FINISH && left == 0 && right == 0);
 
-    /* Chegada apos 9s precisa confirmar branco por 120ms. */
-    setup(0);
-    values[QTR00_L] = 30;
-    wait_ms(200);
+    /* A7 identifica a marca pelo valor bruto mesmo sem calibracao lateral. */
+    begin(0);
+    failed_mask = 1U << QTR07_L;
+    wait_ms(30);
+    values[QTR07_L] = 30;
+    wait_ms(LINE_MARKER_DEBOUNCE_MS - 1U);
     assert(state == RUNNING);
-    values[QTR00_L] = 31;
-    wait_ms(9000);
-    assert(state == RUNNING);
-    values[QTR00_L] = 30;
-    wait_ms(LINE_MARKER_DEBOUNCE_MS - 1);
-    assert(state == RUNNING);
-    wait_ms(60);
+    wait_ms(2);
     assert(state == FINISH && left == 0 && right == 0);
     assert(!(PORTB & (1 << SENSOR_ON)));
 
-    /* Sem saida da marca inicial, nao finaliza. */
+    /* Sem saida da marca inicial em A7, nao finaliza. */
     begin(0);
-    values[QTR00_L] = 30;
+    values[QTR07_L] = 30;
     wait_ms(9500);
     assert(state == RUNNING);
 

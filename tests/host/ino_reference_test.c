@@ -69,8 +69,8 @@ static int constrain_motor(int value){
 int main(void){
     STATE state = RUNNING;
     uint32_t seed = 37;
-    values[0] = 1023; /* A0 fora da marca. */
-    values[7] = 0;    /* Sem evento Curve_line. */
+    values[0] = 1023; /* A0 fora da marca de curva. */
+    values[7] = 1023; /* A7 fora da marca de parada. */
     for(unsigned frame = 0; frame < 1000; frame++){
         for(unsigned c = 1; c <= 6; c++){
             seed = seed * 1664525UL + 1013904223UL;

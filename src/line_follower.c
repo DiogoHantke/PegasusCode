@@ -19,9 +19,9 @@ static uint8_t samples[SENSORS_QUANTITY];
 static uint8_t valid_mask;
 static uint16_t side_value, stop_value;
 static uint8_t loss_pending, curve, side_last, marker_candidate, marker_pending;
-static uint8_t finish_armed, finish_enabled, finish_inhibited;
+static uint8_t finish_armed, finish_inhibited;
 static int16_t last_error, last_position;
-static uint16_t started, last_frame, frame_started, loss_started;
+static uint16_t last_frame, frame_started, loss_started;
 static uint16_t marker_changed, finish_changed, finish_inhibited_since;
 
 static int16_t constrain_value(int32_t value, int16_t limit){
@@ -161,9 +161,9 @@ static void curve_line(uint16_t now, uint8_t crossing){
 
     if((valid_mask & 0x81U) != 0x81U)return;
 
-    /* Mesma condicao bruta de Curve_line: A7 >= 30 e A0 <= 30. */
-    uint8_t side = !crossing && side_value >= LINE_MARKER_RAW_THRESHOLD &&
-                   stop_value <= LINE_MARKER_RAW_THRESHOLD;
+    /* A0 marca curva enquanto A7 esta fora da marca de parada. */
+    uint8_t side = !crossing && side_value <= LINE_MARKER_RAW_THRESHOLD &&
+                   stop_value > LINE_MARKER_RAW_THRESHOLD;
 
     if(side != marker_candidate){
 
@@ -183,16 +183,16 @@ static void curve_line(uint16_t now, uint8_t crossing){
 
 static uint8_t finish_line(uint16_t now){
 
-    if(!(valid_mask & (1U << QTR00_L)))return 0;
-
-    if((uint16_t)(now - started) >= LINE_FINISH_DELAY_MS)finish_enabled = 1;
-
     if(stop_value > LINE_MARKER_RAW_THRESHOLD){
 
         finish_armed = 1;
         marker_pending = 0;
 
-    }else if(finish_armed && !finish_inhibited && finish_enabled){
+    }else if(finish_inhibited){
+
+        finish_armed = marker_pending = 0;
+
+    }else if(finish_armed){
 
         if(!marker_pending){
 
@@ -224,10 +224,10 @@ void line_follower_step(STATE *state){
         stop_motors();
         initialized = 1;
         index_sensor = curve = side_last = marker_candidate = marker_pending = 0;
-        finish_armed = finish_enabled = finish_inhibited = loss_pending = 0;
+        finish_armed = finish_inhibited = loss_pending = 0;
         valid_mask = 0;
         last_error = last_position = 0;
-        started = frame_started = marker_changed = now;
+        frame_started = marker_changed = now;
         last_frame = now - LINE_PERIOD_MS;
         PORTB |= (1 << SENSOR_ON);
 
@@ -252,8 +252,8 @@ void line_follower_step(STATE *state){
         samples[channel] = 0;
     }
 
-    if(channel == QTR07_L)side_value = raw;
-    if(channel == QTR00_L)stop_value = raw;
+    if(channel == QTR00_L)side_value = raw;
+    if(channel == QTR07_L)stop_value = raw;
     if(++index_sensor < SENSORS_QUANTITY)return;
 
     index_sensor = 0;
@@ -280,8 +280,8 @@ void line_follower_step(STATE *state){
         return;
     }
     uint8_t online = active != 0;
-    uint8_t crossing = active >= 5U;
-    if(crossing || (!active && available == 6U)){
+    uint8_t crossing = active >= 4U;
+    if(crossing){
         finish_inhibited = 1;
         finish_inhibited_since = now;
         marker_pending = 0;
@@ -289,6 +289,12 @@ void line_follower_step(STATE *state){
              (uint16_t)(now - finish_inhibited_since) >= LINE_FINISH_CROSSING_HOLD_MS){
         finish_inhibited = 0;
     }
+    if(finish_line(now)){
+        line_follower_reset();
+        *state = FINISH;
+        return;
+    }
+
     int16_t position = get_position(sum, weighted, online);
 
     if(!online && !loss_pending){
@@ -301,7 +307,7 @@ void line_follower_step(STATE *state){
     if(loss_pending){
 
         stop_motors();
-        marker_pending = marker_candidate = side_last = 0;
+        marker_candidate = side_last = 0;
         marker_changed = now;
 
         if(!online)return;
@@ -314,14 +320,6 @@ void line_follower_step(STATE *state){
     if((uint16_t)(now - last_frame) < LINE_PERIOD_MS)return;
 
     last_frame = now;
-
-    if(finish_line(now)){
-
-        line_follower_reset();
-        *state = FINISH;
-        return;
-
-    }
 
     int16_t base = curve ? LINE_CURVE_SPEED : LINE_BASE_SPEED;
     int16_t limit = curve ? LINE_CURVE_TURN_LIMIT : LINE_TURN_LIMIT;

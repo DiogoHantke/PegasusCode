@@ -45,14 +45,13 @@ frontais que atendem a esse limiar entram no calculo da posicao.
 Sem linha detectada, o PWM zera no primeiro quadro; apos 150 ms o estado
 e EMERGENCY. Falta de resposta do ADC por 100 ms tambem para os motores.
 
-As marcas seguem A7 >= 30 e A0 <= 30, com 120 ms de confirmacao. A chegada
-requer nove segundos desde a partida, saida da marca inicial e nova marca
-A0 <= 30 por 120 ms. O cruzamento com cinco ou mais frontais ativos inibe
-marcas enquanto e visto. A chegada em A0 permanece bloqueada por dois
-segundos apos a ultima leitura de cruzamento ou de fundo escuro nos seis
-frontais. A confirmacao de 120 ms da chegada comeca apos esse bloqueio.
-Um lateral sem calibracao desabilita a funcao correspondente sem impedir
-corrida; com A0 falho, a parada final deve ser feita pelo botao.
+A7 confirma a chegada quando sai da marca inicial e depois le 30 ou
+menos durante 120 ms. O limite e aplicado diretamente ao ADC de A7.
+Quatro ou mais frontais ativos caracterizam cruzamento. A7 fica
+bloqueado durante o cruzamento e por 2 s apos a ultima leitura dele.
+Uma marca lida durante o bloqueio exige sair dela antes de confirmar
+outra chegada. A0 indica curva quando le 30 ou menos e A7 esta fora da
+marca de chegada, com 120 ms de confirmacao.
 
 ## Compilacao e diagnostico
 
