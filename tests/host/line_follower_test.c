@@ -154,9 +154,9 @@ int main(void){
     wait_ms(LINE_MARKER_DEBOUNCE_MS - 1);
     assert(left == LINE_BASE_SPEED && right == LINE_BASE_SPEED);
     wait_ms(60);
-    assert(left == 46 && right == 46);
+    assert(left == LINE_CURVE_SPEED && right == LINE_CURVE_SPEED);
     wait_ms(200);
-    assert(left == 46);
+    assert(left == LINE_CURVE_SPEED);
     values[QTR00_L] = 31;
     wait_ms(180);
     values[QTR00_L] = 30;
