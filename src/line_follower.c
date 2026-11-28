@@ -42,8 +42,6 @@ static void stop_motors(void){
 
 static void motor_left(int16_t value){
 
-    value = constrain_value(value, MOTOR_PWM_MAX);
-
     if(value >= 0){
 
         PORTB |= (1 << MOTOR_L_FORWARD);
@@ -62,8 +60,6 @@ static void motor_left(int16_t value){
 }
 
 static void motor_right(int16_t value){
-
-    value = constrain_value(value, MOTOR_PWM_MAX);
 
     if(value >= 0){
 
@@ -327,10 +323,11 @@ void line_follower_step(STATE *state){
 
     int16_t base = curve ? LINE_CURVE_SPEED : LINE_BASE_SPEED;
     int16_t limit = curve ? LINE_CURVE_TURN_LIMIT : LINE_TURN_LIMIT;
+    int16_t pwm_limit = curve ? MOTOR_CURVE_PWM_MAX : MOTOR_PWM_MAX;
     int16_t correction = pid_line(position, LINE_KP, LINE_KD, limit);
     /* Erro negativo aponta para A6 e reduz a velocidade da roda esquerda. */
-    int16_t left = base + correction;
-    int16_t right = base - correction;
+    int16_t left = constrain_value(base + correction, pwm_limit);
+    int16_t right = constrain_value(base - correction, pwm_limit);
 
     /* Como no loop do sketch, a marca altera a velocidade do proximo passo. */
     curve_line(now, crossing);

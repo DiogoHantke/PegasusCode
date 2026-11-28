@@ -31,8 +31,8 @@ O ADC oferece dez bits na corrida e oito bits na calibracao.
 O calculo segue `Main (1).ino`: A6..A1, normalizacao em 0..100, pesos -2.5 a
 +2.5 e PD `erro * 1.2 + (erro - erro_anterior) * 4.3`. O limite de correcao
 e 250 em reta e 110 em curva. Os comandos sao base mais correcao na
-esquerda e base menos correcao na direita. O PWM maximo e de 60% (153/255).
-A base e 153 em reta e 46 em curva. O controle atualiza a cada 5 ms.
+esquerda e base menos correção na direita. O PWM máximo é 180 na reta e 153 no modo de curva.
+A base é 180 na reta e 46 no modo de curva. O controle atualiza a cada 5 ms.
 
 O Pegasus segue a faixa branca. Com `CAL_WHITE_HIGH=0`, leituras
 proximas do minimo calibrado representam o branco. Use 1 para sensores
